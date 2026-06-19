@@ -1,0 +1,16 @@
+{
+  "_comment": "Substrings/phrases that, if found in newly-added DOM text, signal a usage limit or quota state. User-editable from the options page (Phase 2). Add the exact phrase you see in the Claude UI if detection misses it.",
+  "phrases": [
+    "reached your",
+    "usage limit",
+    "message limit",
+    "daily limit",
+    "try again",
+    "upgrade to continue",
+    "You've hit",
+    "out of messages",
+    "plan's limit",
+    "conversation is too long",
+    "start a new conversation"
+  ]
+}

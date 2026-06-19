@@ -1,0 +1,360 @@
+/* popup/popup.css — Context Handoff extension popup styles
+   Design: dark-mode, purple accent, clean and premium feel.
+   No external fonts (extension CSP doesn't allow googleapis.com by default).
+   System font stack used instead. */
+
+/* ── Reset & base ──────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* Color tokens */
+  --clr-bg:          #111118;
+  --clr-surface:     #1a1a24;
+  --clr-surface-2:   #22222e;
+  --clr-border:      #2d2d3d;
+  --clr-border-soft: #252535;
+
+  --clr-purple:      #7C3AED;
+  --clr-purple-light:#9B5DE5;
+  --clr-purple-glow: rgba(124, 58, 237, 0.25);
+  --clr-purple-faint:rgba(124, 58, 237, 0.08);
+
+  --clr-text:        #e8e8f0;
+  --clr-text-muted:  #7a7a96;
+  --clr-text-dim:    #4a4a62;
+
+  --clr-success:     #34d399;
+  --clr-success-bg:  rgba(52, 211, 153, 0.1);
+  --clr-error:       #f87171;
+  --clr-error-bg:    rgba(248, 113, 113, 0.1);
+  --clr-warning:     #fbbf24;
+  --clr-warning-bg:  rgba(251, 191, 36, 0.1);
+
+  /* Spacing */
+  --sp-xs: 4px;
+  --sp-sm: 8px;
+  --sp-md: 14px;
+  --sp-lg: 20px;
+
+  /* Radius */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+
+  /* Transitions */
+  --t-fast: 140ms ease;
+  --t-base: 220ms ease;
+}
+
+body {
+  width: 320px;
+  min-height: 260px;
+  background: var(--clr-bg);
+  color: var(--clr-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ── Popup wrapper ─────────────────────────────────────────────────────────── */
+.popup {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+
+/* ── Header ────────────────────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  padding: var(--sp-md) var(--sp-md) var(--sp-sm);
+  border-bottom: 1px solid var(--clr-border);
+}
+
+.logo {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo svg {
+  border-radius: 7px;
+  box-shadow: 0 0 12px var(--clr-purple-glow);
+}
+
+.header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-name {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--clr-text);
+  line-height: 1.2;
+}
+
+.app-version {
+  font-size: 10px;
+  color: var(--clr-text-dim);
+  letter-spacing: 0.02em;
+}
+
+.icon-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--clr-border-soft);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--clr-text-muted);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+
+.icon-btn:hover {
+  background: var(--clr-surface-2);
+  color: var(--clr-text);
+  border-color: var(--clr-border);
+}
+
+/* ── Status bar ────────────────────────────────────────────────────────────── */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-xs);
+  padding: var(--sp-xs) var(--sp-md);
+  background: var(--clr-surface);
+  border-bottom: 1px solid var(--clr-border-soft);
+  min-height: 28px;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background var(--t-base);
+  background: var(--clr-text-dim);
+}
+
+.status-dot[data-status="idle"]    { background: var(--clr-text-dim); }
+.status-dot[data-status="loading"] { background: var(--clr-purple-light); animation: pulse 1s infinite; }
+.status-dot[data-status="ready"]   { background: var(--clr-success); }
+.status-dot[data-status="success"] { background: var(--clr-success); }
+.status-dot[data-status="error"]   { background: var(--clr-error); }
+.status-dot[data-status="warning"] { background: var(--clr-warning); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.status-label {
+  font-size: 11px;
+  color: var(--clr-text-muted);
+  letter-spacing: 0.01em;
+}
+
+/* ── Main ──────────────────────────────────────────────────────────────────── */
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-sm);
+  padding: var(--sp-md);
+}
+
+/* ── Export button ─────────────────────────────────────────────────────────── */
+.btn-export {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-sm);
+  width: 100%;
+  padding: 11px var(--sp-md);
+  background: var(--clr-purple);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-md);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background var(--t-fast), transform var(--t-fast), box-shadow var(--t-fast), opacity var(--t-fast);
+  box-shadow: 0 2px 12px var(--clr-purple-glow);
+  overflow: hidden;
+}
+
+.btn-export::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08), transparent);
+  pointer-events: none;
+}
+
+.btn-export:not(:disabled):hover {
+  background: var(--clr-purple-light);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px var(--clr-purple-glow);
+}
+
+.btn-export:not(:disabled):active {
+  transform: translateY(0);
+  box-shadow: 0 1px 8px var(--clr-purple-glow);
+}
+
+.btn-export:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--t-fast);
+}
+
+.btn-export:not(:disabled):hover .btn-icon {
+  transform: translateY(1px);
+}
+
+/* Spinner shown during loading state */
+.btn-spinner {
+  display: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+}
+
+.btn-export.loading .btn-spinner {
+  display: block;
+  animation: spin 0.6s linear infinite;
+}
+
+.btn-export.loading .btn-icon,
+.btn-export.loading .btn-label {
+  opacity: 0.7;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Conversation meta line ────────────────────────────────────────────────── */
+.conv-meta {
+  font-size: 11px;
+  color: var(--clr-text-muted);
+  text-align: center;
+  min-height: 16px;
+  padding: 0 var(--sp-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Future action buttons (Phase 2/3 preview) ─────────────────────────────── */
+.future-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-xs);
+  padding-top: var(--sp-xs);
+  border-top: 1px solid var(--clr-border-soft);
+}
+
+.btn-future {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-xs);
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border-soft);
+  border-radius: var(--r-sm);
+  color: var(--clr-text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: not-allowed;
+  text-align: left;
+  transition: none;
+}
+
+.btn-future svg {
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+.chip {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--clr-purple-faint);
+  color: var(--clr-purple-light);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  border-radius: 100px;
+  padding: 1px 6px;
+}
+
+/* ── Toast ─────────────────────────────────────────────────────────────────── */
+.toast {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-xs);
+  padding: 9px 12px;
+  border-radius: var(--r-md);
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity var(--t-base), transform var(--t-base);
+  backdrop-filter: blur(8px);
+}
+
+.toast.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.toast[data-type="success"] {
+  background: var(--clr-success-bg);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  color: var(--clr-success);
+}
+
+.toast[data-type="error"] {
+  background: var(--clr-error-bg);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  color: var(--clr-error);
+}
+
+.toast-icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}

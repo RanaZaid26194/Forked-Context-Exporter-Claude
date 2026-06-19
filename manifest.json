@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "Context Handoff",
+  "version": "0.1.0",
+  "description": "Exports LLM chat conversations, detects usage limits, and prepares handoff prompts for continuing in another chat. 100% local — no API keys, no telemetry.",
+
+  "permissions": [
+    "activeTab",
+    "storage",
+    "downloads",
+    "notifications",
+    "scripting"
+  ],
+
+  "host_permissions": [
+    "https://claude.ai/*",
+    "https://chat.openai.com/*"
+  ],
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Context Handoff",
+    "default_icon": {
+      "16":  "icons/icon16.png",
+      "48":  "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": [
+        "content-scripts/shared/scrape-utils.js",
+        "content-scripts/claude.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://chat.openai.com/*"],
+      "js": [
+        "content-scripts/shared/scrape-utils.js",
+        "content-scripts/chatgpt.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "options_page": "options/options.html",
+
+  "icons": {
+    "16":  "icons/icon16.png",
+    "48":  "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
