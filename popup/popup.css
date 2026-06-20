@@ -18,13 +18,25 @@
   --clr-border:      #2d2d3d;
   --clr-border-soft: #252535;
 
-  --clr-purple:      #7C3AED;
-  --clr-purple-light:#9B5DE5;
-  --clr-purple-glow: rgba(124, 58, 237, 0.25);
-  --clr-purple-faint:rgba(124, 58, 237, 0.08);
+  --clr-purple:       #7C3AED;
+  --clr-purple-light: #9B5DE5;
+  --clr-purple-glow:  rgba(124, 58, 237, 0.25);
+  --clr-purple-faint: rgba(124, 58, 237, 0.08);
 
+  /* Teal accent for the GPT button — distinct from hero purple */
+  --clr-teal:        #0ea5e9;
+  --clr-teal-light:  #38bdf8;
+  --clr-teal-glow:   rgba(14, 165, 233, 0.22);
+  --clr-teal-faint:  rgba(14, 165, 233, 0.08);
+
+  /* Text hierarchy:
+     --clr-text        → primary content (headings, button labels, active values)
+     --clr-text-sec    → secondary content (status labels, secondary btn labels)
+                         Was --clr-text-muted (#7a7a96) — now lifted to #b8b8cc
+     --clr-text-dim    → truly de-emphasized (version, timestamps, placeholder hints) */
   --clr-text:        #e8e8f0;
-  --clr-text-muted:  #7a7a96;
+  --clr-text-sec:    #b8b8cc;   /* ← was #7a7a96, contrast fix */
+  --clr-text-muted:  #7a7a96;   /* kept for genuinely de-emphasized chrome */
   --clr-text-dim:    #4a4a62;
 
   --clr-success:     #34d399;
@@ -48,6 +60,7 @@
   /* Transitions */
   --t-fast: 140ms ease;
   --t-base: 220ms ease;
+  --t-slow: 320ms ease;
 }
 
 body {
@@ -69,6 +82,60 @@ body {
   flex-direction: column;
   gap: 0;
   position: relative;
+}
+
+/* ── Toast — anchored to top as a slim banner, never overlaps content ─────── */
+/* Rendered first in DOM (before header) so it paints above everything via
+   position:fixed without needing z-index battles with absolute children. */
+.toast {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-xs);
+  padding: 7px 12px;
+  font-size: 11.5px;
+  font-weight: 500;
+  opacity: 0;
+  transform: translateY(-100%);
+  pointer-events: none;
+  transition: opacity var(--t-base), transform var(--t-base);
+  z-index: 100;
+  border-bottom: 1px solid transparent;
+}
+
+.toast.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.toast[data-type="success"] {
+  background: rgba(22, 101, 52, 0.95);
+  border-color: rgba(52, 211, 153, 0.3);
+  color: #86efac;
+  backdrop-filter: blur(8px);
+}
+
+.toast[data-type="error"] {
+  background: rgba(127, 29, 29, 0.95);
+  border-color: rgba(248, 113, 113, 0.3);
+  color: #fca5a5;
+  backdrop-filter: blur(8px);
+}
+
+.toast[data-type="warning"] {
+  background: rgba(120, 53, 15, 0.95);
+  border-color: rgba(251, 191, 36, 0.3);
+  color: #fde68a;
+  backdrop-filter: blur(8px);
+}
+
+.toast-icon {
+  font-size: 12px;
+  flex-shrink: 0;
 }
 
 /* ── Header ────────────────────────────────────────────────────────────────── */
@@ -107,7 +174,7 @@ body {
 
 .app-version {
   font-size: 10px;
-  color: var(--clr-text-dim);
+  color: var(--clr-text-dim);   /* version is genuinely de-emphasized */
   letter-spacing: 0.02em;
 }
 
@@ -121,7 +188,7 @@ body {
   border: 1px solid var(--clr-border-soft);
   border-radius: var(--r-sm);
   background: transparent;
-  color: var(--clr-text-muted);
+  color: var(--clr-text-sec);   /* lifted from text-muted */
   cursor: pointer;
   transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
 }
@@ -166,7 +233,7 @@ body {
 
 .status-label {
   font-size: 11px;
-  color: var(--clr-text-muted);
+  color: var(--clr-text-sec);   /* lifted from text-muted — this is primary content */
   letter-spacing: 0.01em;
 }
 
@@ -178,7 +245,7 @@ body {
   padding: var(--sp-md);
 }
 
-/* ── Export button ─────────────────────────────────────────────────────────── */
+/* ── Export button (hero) ──────────────────────────────────────────────────── */
 .btn-export {
   position: relative;
   display: flex;
@@ -263,80 +330,13 @@ body {
 /* ── Conversation meta line ────────────────────────────────────────────────── */
 .conv-meta {
   font-size: 11px;
-  color: var(--clr-text-muted);
+  color: var(--clr-text-sec);   /* lifted from text-muted */
   text-align: center;
   min-height: 16px;
   padding: 0 var(--sp-xs);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* ── Secondary action buttons (Summary + Full Transcript) ───────────────────── */
-.secondary-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--sp-xs);
-}
-
-.btn-secondary {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-xs);
-  padding: 8px 10px;
-  background: var(--clr-surface);
-  border: 1px solid var(--clr-border);
-  border-radius: var(--r-sm);
-  color: var(--clr-text-muted);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  position: relative;
-}
-
-.btn-secondary::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: transparent;
-  transition: background var(--t-fast);
-  pointer-events: none;
-}
-
-.btn-secondary:not(:disabled):hover {
-  background: var(--clr-surface-2);
-  color: var(--clr-text);
-  border-color: var(--clr-border);
-}
-
-.btn-secondary:not(:disabled):active {
-  background: var(--clr-surface);
-}
-
-.btn-secondary:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.btn-secondary.loading .btn-spinner-sm {
-  display: inline-block;
-  animation: spin 0.6s linear infinite;
-}
-
-.btn-spinner-sm {
-  display: none;
-  width: 10px;
-  height: 10px;
-  border: 1.5px solid rgba(255,255,255,0.3);
-  border-top-color: currentColor;
-  border-radius: 50%;
-  flex-shrink: 0;
 }
 
 /* ── Primary btn badge ──────────────────────────────────────────────────────── */
@@ -356,89 +356,139 @@ body {
 
 .btn-export.loading .btn-badge { opacity: 0.5; }
 
-/* ── Future action buttons (Phase 3 stub) ───────────────────────────────────── */
-.future-actions {
-  display: flex;
-  flex-direction: column;
+/* ── Secondary action buttons (Export Summary + Full Transcript) ────────────── */
+.secondary-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--sp-xs);
-  padding-top: var(--sp-xs);
-  border-top: 1px solid var(--clr-border-soft);
 }
 
-.btn-future {
+.btn-secondary {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--sp-xs);
-  width: 100%;
   padding: 8px 10px;
   background: var(--clr-surface);
-  border: 1px solid var(--clr-border-soft);
+  border: 1px solid var(--clr-border);
   border-radius: var(--r-sm);
-  color: var(--clr-text-dim);
+  color: var(--clr-text-sec);   /* lifted from text-muted */
   font-size: 12px;
   font-weight: 500;
-  cursor: not-allowed;
-  text-align: left;
-  transition: none;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
 }
 
-.btn-future svg {
+.btn-secondary:not(:disabled):hover {
+  background: var(--clr-surface-2);
+  color: var(--clr-text);
+  border-color: var(--clr-border);
+}
+
+.btn-secondary:not(:disabled):active {
+  background: var(--clr-surface);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btn-spinner-sm {
+  display: none;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(255,255,255,0.3);
+  border-top-color: currentColor;
+  border-radius: 50%;
   flex-shrink: 0;
+}
+
+.btn-secondary.loading .btn-spinner-sm {
+  display: inline-block;
+  animation: spin 0.6s linear infinite;
+}
+
+/* ── Send to ChatGPT button ─────────────────────────────────────────────────── */
+/* Visually the second-most-important action. Uses teal accent (distinct from
+   the hero's purple) with a glow transition to draw the eye when it activates. */
+.btn-gpt {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-top: 2px;
+  /* Disabled: clearly low-priority, dashed border, muted everything */
+  border-style: dashed;
+  border-color: var(--clr-border-soft);
+  color: var(--clr-text-dim);
+  background: transparent;
+  /* Smooth transition when it flips to enabled */
+  transition:
+    background    var(--t-slow),
+    color         var(--t-slow),
+    border-color  var(--t-slow),
+    border-style  0ms,
+    box-shadow    var(--t-slow),
+    opacity       var(--t-fast);
+}
+
+.btn-gpt:disabled {
+  cursor: not-allowed;
   opacity: 0.5;
 }
 
-.chip {
+/* Enabled: teal accent, solid border, glow */
+.btn-gpt:not(:disabled) {
+  border-style: solid;
+  border-color: var(--clr-teal);
+  color: var(--clr-teal-light);
+  background: var(--clr-teal-faint);
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.12),
+              0 2px 10px rgba(14, 165, 233, 0.08);
+}
+
+.btn-gpt:not(:disabled):hover {
+  background: rgba(14, 165, 233, 0.14);
+  border-color: var(--clr-teal-light);
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.2),
+              0 3px 14px rgba(14, 165, 233, 0.14);
+  color: #fff;
+}
+
+.btn-gpt:not(:disabled):active {
+  background: var(--clr-teal-faint);
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.15);
+}
+
+/* Pulse animation fires once when the button transitions to enabled */
+@keyframes gpt-activate {
+  0%   { box-shadow: 0 0 0 0   rgba(14, 165, 233, 0.55); }
+  60%  { box-shadow: 0 0 0 8px rgba(14, 165, 233, 0); }
+  100% { box-shadow: 0 0 0 8px rgba(14, 165, 233, 0); }
+}
+
+.btn-gpt.just-activated {
+  animation: gpt-activate 0.55s ease-out forwards;
+}
+
+.btn-gpt-hint {
   margin-left: auto;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  background: var(--clr-purple-faint);
-  color: var(--clr-purple-light);
-  border: 1px solid rgba(124, 58, 237, 0.2);
-  border-radius: 100px;
-  padding: 1px 6px;
-}
-
-/* ── Toast ─────────────────────────────────────────────────────────────────── */
-.toast {
-  position: absolute;
-  bottom: 12px;
-  left: 12px;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-xs);
-  padding: 9px 12px;
-  border-radius: var(--r-md);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 500;
-  opacity: 0;
-  transform: translateY(6px);
-  pointer-events: none;
-  transition: opacity var(--t-base), transform var(--t-base);
-  backdrop-filter: blur(8px);
-}
-
-.toast.visible {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-
-.toast[data-type="success"] {
-  background: var(--clr-success-bg);
-  border: 1px solid rgba(52, 211, 153, 0.25);
-  color: var(--clr-success);
-}
-
-.toast[data-type="error"] {
-  background: var(--clr-error-bg);
-  border: 1px solid rgba(248, 113, 113, 0.25);
-  color: var(--clr-error);
-}
-
-.toast-icon {
-  font-size: 13px;
+  color: var(--clr-text-dim);
+  font-style: italic;
+  white-space: nowrap;
   flex-shrink: 0;
+  transition: color var(--t-slow);
+}
+
+.btn-gpt:not(:disabled) .btn-gpt-hint {
+  color: var(--clr-teal);
+  font-style: normal;
+  font-weight: 600;
 }

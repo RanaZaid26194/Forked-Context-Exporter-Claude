@@ -10,6 +10,12 @@
 
   <div class="popup">
 
+    <!-- Toast — fixed top banner, never overlaps content below -->
+    <div class="toast" id="toast" role="status" aria-live="polite">
+      <span class="toast-icon" aria-hidden="true">✓</span>
+      <span id="toastMsg"></span>
+    </div>
+
     <!-- Header -->
     <header class="header">
       <div class="logo">
@@ -21,7 +27,7 @@
       </div>
       <div class="header-text">
         <h1 class="app-name">Context Handoff</h1>
-        <span class="app-version">v0.2.0 · Phase 2</span>
+        <span class="app-version">v0.3.0 · Phase 3</span>
       </div>
       <button class="icon-btn" id="optionsLink" title="Settings" aria-label="Open settings">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -60,7 +66,7 @@
       <!-- Conversation metadata (populated after export) -->
       <p class="conv-meta" id="convMeta"></p>
 
-      <!-- Secondary actions -->
+      <!-- Secondary actions row -->
       <div class="secondary-actions">
         <button class="btn-secondary" id="exportSummaryBtn" disabled>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -83,28 +89,21 @@
         </button>
       </div>
 
-      <!-- Phase 3 stub -->
-      <div class="future-actions">
-        <button class="btn-future" disabled title="Coming in Phase 3">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="15 3 21 3 21 9"/>
-            <polyline points="9 21 3 21 3 15"/>
-            <line x1="21" y1="3" x2="14" y2="10"/>
-            <line x1="3" y1="21" x2="10" y2="14"/>
-          </svg>
-          Send Handoff to ChatGPT
-          <span class="chip">Phase 3</span>
-        </button>
-      </div>
+      <!-- Send to ChatGPT — enabled only after handoff prompt is generated -->
+      <button class="btn-secondary btn-gpt" id="sendToGPTBtn" disabled
+              title="Generate a Handoff Prompt first, then click to open ChatGPT and fill it">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="15 3 21 3 21 9"/>
+          <polyline points="9 21 3 21 3 15"/>
+          <line x1="21" y1="3" x2="14" y2="10"/>
+          <line x1="3" y1="21" x2="10" y2="14"/>
+        </svg>
+        Send Handoff to ChatGPT
+        <span class="btn-gpt-hint" id="gptHint">Generate handoff first</span>
+      </button>
 
     </main>
-
-    <!-- Toast notification -->
-    <div class="toast" id="toast" role="status" aria-live="polite">
-      <span class="toast-icon" aria-hidden="true">✓</span>
-      <span id="toastMsg"></span>
-    </div>
 
   </div>
 
