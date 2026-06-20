@@ -30,6 +30,7 @@
     // these. data-testid attributes are more stable than generated class names.
     // best-effort selectors, verify against live DOM
     turnContainers: [
+      '[class*="font-user-message"], [class*="font-claude-message"]',
       '[data-testid^="message-"]',          // message-<uuid> — most specific
       '[data-testid="human-turn"]',
       '[data-testid="ai-turn"]',
@@ -72,6 +73,8 @@
     // Conversation title.
     // best-effort selectors, verify against live DOM
     title: [
+      '[data-testid="chat-title-split"] .truncate',
+      '[data-testid="chat-title-split"]',
       '[data-testid="chat-title-button"] .truncate',
       'button[data-testid="chat-title-button"] div.truncate',
       '[data-testid="chat-title-button"]',
@@ -110,6 +113,13 @@
    * alternation.
    */
   function isAssistantTurn(turnEl) {
+    var cls = turnEl.className || '';
+    if (typeof cls === 'string') {
+      if (cls.indexOf('font-claude-message') !== -1) return true;
+      if (cls.indexOf('font-user-message') !== -1) return false;
+    }
+
+    // Fallbacks:
     // Primary: feedback buttons
     for (var i = 0; i < SEL.feedbackButtons.length; i++) {
       try {
@@ -190,38 +200,132 @@
   function scrapeConversation() {
     var title = getTitle();
 
-    // 1. Find turn containers
+    // ── Strategy 1: Common-ancestor walk ────────────────────────────────────────
+    // Find a user-message element AND a feedback button. Walk up from each to
+    // find their closest common ancestor — that's the conversation container.
+    // Then walk its children, classifying each by what it contains.
+    var firstUserMsg = document.querySelector('[data-testid="user-message"]');
+    var firstFeedbackBtn = null;
+    for (var fb = 0; fb < SEL.feedbackButtons.length; fb++) {
+      try {
+        firstFeedbackBtn = document.querySelector(SEL.feedbackButtons[fb]);
+        if (firstFeedbackBtn) break;
+      } catch (e) { /* */ }
+    }
+
+    console.log('[CH-DEBUG] firstUserMsg:', !!firstUserMsg, '| firstFeedbackBtn:', !!firstFeedbackBtn);
+
+    if (firstUserMsg && firstFeedbackBtn) {
+      // Collect all ancestors of the user message element
+      var userAncestors = new Set();
+      var node = firstUserMsg;
+      while (node) {
+        userAncestors.add(node);
+        node = node.parentElement;
+      }
+      // Walk up from feedback button until we hit a shared ancestor
+      var container = firstFeedbackBtn.parentElement;
+      while (container && !userAncestors.has(container)) {
+        container = container.parentElement;
+      }
+
+      console.log('[CH-DEBUG] common ancestor tag:', container ? container.tagName : 'null',
+        '| children:', container ? container.children.length : 0);
+
+      if (container && container.children.length >= 2) {
+        var classifiedEls = [];
+        var children = Array.from(container.children);
+        for (var c = 0; c < children.length; c++) {
+          var child = children[c];
+          // User turn: contains a user-message testid
+          if (child.querySelector('[data-testid="user-message"]') || child.getAttribute('data-testid') === 'user-message') {
+            classifiedEls.push({ el: child, role: 'user' });
+            continue;
+          }
+          // Assistant turn: contains a feedback button
+          var hasFeedback = false;
+          for (var f = 0; f < SEL.feedbackButtons.length; f++) {
+            try {
+              if (child.querySelector(SEL.feedbackButtons[f])) {
+                hasFeedback = true;
+                break;
+              }
+            } catch (e) { /* */ }
+          }
+          if (hasFeedback) {
+            classifiedEls.push({ el: child, role: 'assistant' });
+          }
+        }
+
+        console.log('[CH-DEBUG] classifiedEls:', classifiedEls.length,
+          '| roles:', classifiedEls.map(function(e) { return e.role; }).join(','));
+
+        if (classifiedEls.length > 0) {
+          var turns = [];
+          for (var t = 0; t < classifiedEls.length; t++) {
+            var text = extractText(classifiedEls[t].el);
+            var codeBlocks = extractCodeBlocks(classifiedEls[t].el);
+            console.log('[CH-DEBUG] turn[' + t + '] role=' + classifiedEls[t].role +
+              ' textLen=' + (text ? text.length : 0) +
+              ' codeBlocks=' + codeBlocks.length +
+              ' textPreview="' + (text || '').slice(0, 40) + '"');
+            if (!text && codeBlocks.length === 0) continue;
+            turns.push({ role: classifiedEls[t].role, text: text, codeBlocks: codeBlocks });
+          }
+          console.log('[CH-DEBUG] final turns count:', turns.length);
+          if (turns.length > 0) {
+            return {
+              source: 'claude.ai',
+              title: title,
+              capturedAt: new Date().toISOString(),
+              url: window.location.href,
+              turns: turns,
+            };
+          }
+        }
+      }
+    }
+
+    // ── Strategy 2: Legacy CSS-class selector fallback ─────────────────────────
+    // Used if Strategy 1 finds nothing (e.g. Claude refactors data-testid).
     var turnEls = queryAll(SEL.turnContainers);
 
-    // 2. Structural fallback
     if (turnEls.length === 0) {
       console.warn('[Context Handoff] No turns via primary selectors — trying structural fallback.');
       turnEls = fallbackTurnScan();
     }
 
     if (turnEls.length === 0) {
-      // Log so the user can report what page state we couldn't handle
       console.warn('[Context Handoff] Could not find any conversation turns. ' +
         'Verify you are on a conversation page (not the home/new-chat screen). ' +
         'If Claude updated their DOM, update SEL.turnContainers in claude.js.');
       return null;
     }
 
-    // 3. Build normalized turns
-    var turns = [];
-    for (var i = 0; i < turnEls.length; i++) {
-      var el = turnEls[i];
+    // Keep only outermost matched elements (avoid nested duplicates)
+    var outerEls = [];
+    for (var k = 0; k < turnEls.length; k++) {
+      var isDescendant = false;
+      for (var j = 0; j < turnEls.length; j++) {
+        if (k !== j && turnEls[j].contains(turnEls[k])) {
+          isDescendant = true;
+          break;
+        }
+      }
+      if (!isDescendant) outerEls.push(turnEls[k]);
+    }
+
+    var legacyTurns = [];
+    for (var i = 0; i < outerEls.length; i++) {
+      var el = outerEls[i];
       var role = isAssistantTurn(el) ? 'assistant' : 'user';
       var text = extractText(el);
       var codeBlocks = extractCodeBlocks(el);
-
-      // Skip turns with no meaningful content (e.g. decorative wrappers)
       if (!text && codeBlocks.length === 0) continue;
-
-      turns.push({ role: role, text: text, codeBlocks: codeBlocks });
+      legacyTurns.push({ role: role, text: text, codeBlocks: codeBlocks });
     }
 
-    if (turns.length === 0) {
+    if (legacyTurns.length === 0) {
       console.warn('[Context Handoff] Turn elements found but all were empty after extraction.');
       return null;
     }
@@ -231,8 +335,59 @@
       title: title,
       capturedAt: new Date().toISOString(),
       url: window.location.href,
-      turns: turns,
+      turns: legacyTurns,
     };
+  }
+
+  function debugDOM() {
+    var report = [];
+    try {
+      // 1. Check if main exists
+      var main = document.querySelector('main');
+      report.push('main exists: ' + (!!main));
+      if (main) {
+        report.push('main classes: ' + main.className);
+        report.push('main children count: ' + main.children.length);
+        for (var i = 0; i < Math.min(main.children.length, 5); i++) {
+          var child = main.children[i];
+          report.push('  child ' + i + ': ' + child.tagName + ' class="' + child.className + '" testid="' + child.getAttribute('data-testid') + '"');
+        }
+      }
+
+      // 2. Look for any data-testid elements on the page
+      var testidEls = document.querySelectorAll('[data-testid]');
+      report.push('Total elements with data-testid: ' + testidEls.length);
+      var uniqueTestIds = {};
+      testidEls.forEach(function(el) {
+        uniqueTestIds[el.getAttribute('data-testid')] = true;
+      });
+      report.push('Unique data-testids found: ' + Object.keys(uniqueTestIds).slice(0, 30).join(', '));
+
+      // 3. Search for potential turn elements containing "feedback", "thumbs", or "copy"
+      var copyBtns = document.querySelectorAll('button');
+      var btnLabels = [];
+      copyBtns.forEach(function(btn) {
+        var label = btn.getAttribute('aria-label') || btn.getAttribute('data-testid') || btn.textContent.trim();
+        if (label && (label.toLowerCase().includes('feedback') || label.toLowerCase().includes('thumbs') || label.toLowerCase().includes('copy') || label.toLowerCase().includes('share'))) {
+          btnLabels.push(label + ' (' + btn.className + ')');
+        }
+      });
+      report.push('Buttons with indicators: ' + btnLabels.slice(0, 10).join('; '));
+
+      // 4. Look for divs with classes that might be conversation items
+      var divs = document.querySelectorAll('div');
+      var potentialDivs = [];
+      divs.forEach(function(d) {
+        var cls = d.className || '';
+        if (typeof cls === 'string' && (cls.includes('ConversationItem') || cls.includes('message') || cls.includes('chat-content') || cls.includes('conversation-content'))) {
+          potentialDivs.push(d.tagName + '.' + cls.split(' ').join('.'));
+        }
+      });
+      report.push('Potential conversation divs: ' + potentialDivs.slice(0, 10).join('; '));
+    } catch (e) {
+      report.push('Error during debugDOM: ' + e.message);
+    }
+    return report.join('\n');
   }
 
   // ── Message listener ───────────────────────────────────────────────────────
@@ -250,9 +405,11 @@
         if (conversation) {
           sendResponse({ ok: true, conversation: conversation });
         } else {
+          var debugInfo = debugDOM();
+          console.warn('[Context Handoff] Scrape failed. DOM Report:\n', debugInfo);
           sendResponse({
             ok: false,
-            error: 'No conversation found. Open a conversation (not the home screen) and try again.',
+            error: 'No conversation found.\n\nDOM Report:\n' + debugInfo,
           });
         }
       } catch (err) {

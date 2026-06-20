@@ -84,6 +84,7 @@ document.addEventListener('DOMContentLoaded', function () {
       var pong = await sendToTab(activeTab.id, { action: 'PING' });
       if (pong && pong.ok) {
         setStatus('ready', 'Ready to export');
+        exportBtn.disabled = false;
       } else {
         throw new Error('Bad pong');
       }
@@ -115,7 +116,13 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       var conversation = response.conversation;
+      console.log('[CH-DEBUG-POPUP] turns received:', conversation.turns.length,
+        '| roles:', conversation.turns.map(function(t) { return t.role; }).join(','));
       var markdown = window.ContextHandoff.toMarkdown(conversation);
+      console.log('[CH-DEBUG-POPUP] markdown length:', markdown.length,
+        '| has "### Claude":', markdown.indexOf('### Claude') !== -1,
+        '| "### You" count:', (markdown.match(/### You/g) || []).length,
+        '| "### Claude" count:', (markdown.match(/### Claude/g) || []).length);
 
       if (!markdown) throw new Error('Formatter returned empty output.');
 
