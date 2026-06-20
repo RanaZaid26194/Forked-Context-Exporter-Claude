@@ -213,7 +213,7 @@
       } catch (e) { /* */ }
     }
 
-    console.log('[CH-DEBUG] firstUserMsg:', !!firstUserMsg, '| firstFeedbackBtn:', !!firstFeedbackBtn);
+
 
     if (firstUserMsg && firstFeedbackBtn) {
       // Collect all ancestors of the user message element
@@ -229,8 +229,7 @@
         container = container.parentElement;
       }
 
-      console.log('[CH-DEBUG] common ancestor tag:', container ? container.tagName : 'null',
-        '| children:', container ? container.children.length : 0);
+
 
       if (container && container.children.length >= 2) {
         var classifiedEls = [];
@@ -257,22 +256,18 @@
           }
         }
 
-        console.log('[CH-DEBUG] classifiedEls:', classifiedEls.length,
-          '| roles:', classifiedEls.map(function(e) { return e.role; }).join(','));
+
 
         if (classifiedEls.length > 0) {
           var turns = [];
           for (var t = 0; t < classifiedEls.length; t++) {
             var text = extractText(classifiedEls[t].el);
             var codeBlocks = extractCodeBlocks(classifiedEls[t].el);
-            console.log('[CH-DEBUG] turn[' + t + '] role=' + classifiedEls[t].role +
-              ' textLen=' + (text ? text.length : 0) +
-              ' codeBlocks=' + codeBlocks.length +
-              ' textPreview="' + (text || '').slice(0, 40) + '"');
+
             if (!text && codeBlocks.length === 0) continue;
             turns.push({ role: classifiedEls[t].role, text: text, codeBlocks: codeBlocks });
           }
-          console.log('[CH-DEBUG] final turns count:', turns.length);
+
           if (turns.length > 0) {
             return {
               source: 'claude.ai',
@@ -419,9 +414,112 @@
       return true; // keep message channel open (required for async sendResponse)
     }
 
-    // TODO(Phase 2): handle LIMIT_CHECK action
+    // Phase 2: handle LIMIT_CHECK action (internal — see limit detection below)
   });
+
+  // ── Limit detection (Phase 2) ──────────────────────────────────────────────
+  //
+  // Layer 1: phrase matching against limit-signals (from storage or bundled JSON).
+  // Layer 2: chat input becomes disabled AND a new banner/block appears in same tick.
+  // Layer 3: Layer 2 fires without Layer 1 → log banner text for user review in Options.
+  //
+  // Fires at most once per page load to avoid notification spam.
+
+  var limitFired   = false;
+  var limitPhrases = [];
+
+  var INPUT_SELS = [
+    '[data-testid="chat-input"]',
+    'div[contenteditable="true"]',
+    'textarea',
+  ];
+
+  function isInputDisabled() {
+    for (var s = 0; s < INPUT_SELS.length; s++) {
+      var el = document.querySelector(INPUT_SELS[s]);
+      if (el) {
+        return el.disabled === true ||
+               el.getAttribute('aria-disabled') === 'true' ||
+               el.getAttribute('contenteditable') === 'false';
+      }
+    }
+    return false;
+  }
+
+  function extractNodeText(node) {
+    try { return (node.innerText || node.textContent || '').trim(); } catch (e) { return ''; }
+  }
+
+  function checkPhrases(text) {
+    var lower = text.toLowerCase();
+    for (var i = 0; i < limitPhrases.length; i++) {
+      if (lower.indexOf(limitPhrases[i].toLowerCase()) !== -1) return limitPhrases[i];
+    }
+    return null;
+  }
+
+  function fireLimitDetected(phrase, bannerText) {
+    if (limitFired) return;
+    limitFired = true;
+    chrome.runtime.sendMessage({ action: 'LIMIT_DETECTED', phrase: phrase || null, url: window.location.href });
+    if (!phrase && bannerText) {
+      chrome.runtime.sendMessage({
+        action: 'UNRECOGNIZED_BANNER',
+        text: bannerText.slice(0, 500),
+        url: window.location.href,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
+  function setupLimitObserver() {
+    var observer = new MutationObserver(function (mutations) {
+      if (limitFired) return;
+      var addedTexts = [];
+      var hasNewBlock = false;
+      for (var m = 0; m < mutations.length; m++) {
+        var nodes = mutations[m].addedNodes;
+        for (var n = 0; n < nodes.length; n++) {
+          if (nodes[n].nodeType !== Node.ELEMENT_NODE) continue;
+          var t = extractNodeText(nodes[n]);
+          if (t.length > 10) { addedTexts.push(t); hasNewBlock = true; }
+        }
+      }
+      if (!addedTexts.length) return;
+      var allText = addedTexts.join(' ');
+      // Layer 1: phrase match
+      var matched = checkPhrases(allText);
+      if (matched) { fireLimitDetected(matched, null); return; }
+      // Layer 2: input disabled + new block
+      if (hasNewBlock && isInputDisabled()) { fireLimitDetected(null, allText); }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function loadLimitPhrases(callback) {
+    chrome.storage.local.get(['limitPhrases', 'autoDetectEnabled'], function (result) {
+      if (result.autoDetectEnabled === false) return;
+      if (result.limitPhrases && result.limitPhrases.length > 0) {
+        limitPhrases = result.limitPhrases;
+        callback();
+      } else {
+        fetch(chrome.runtime.getURL('config/limit-signals.json'))
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            limitPhrases = data.phrases || [];
+            chrome.storage.local.set({ limitPhrases: limitPhrases });
+            callback();
+          })
+          .catch(function () { callback(); });
+      }
+    });
+  }
+
+  if (window.location.pathname.startsWith('/chat/')) {
+    loadLimitPhrases(setupLimitObserver);
+  }
 
   console.log('[Context Handoff] claude.js loaded on', window.location.href);
 
 })();
+

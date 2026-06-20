@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Context Handoff",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Exports LLM chat conversations, detects usage limits, and prepares handoff prompts for continuing in another chat. 100% local — no API keys, no telemetry.",
 
   "permissions": [
@@ -56,5 +56,12 @@
     "16":  "icons/icon16.png",
     "48":  "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": ["config/limit-signals.json"],
+      "matches":   ["https://claude.ai/*", "https://chat.openai.com/*"]
+    }
+  ]
 }

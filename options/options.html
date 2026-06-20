@@ -5,42 +5,262 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Context Handoff — Settings</title>
   <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #111118;
+      --surface:     #1a1a24;
+      --surface-2:   #22222e;
+      --border:      #2d2d3d;
+      --border-soft: #252535;
+      --purple:      #7C3AED;
+      --purple-l:    #9B5DE5;
+      --purple-faint:rgba(124,58,237,0.08);
+      --text:        #e8e8f0;
+      --text-muted:  #7a7a96;
+      --text-dim:    #4a4a62;
+      --success:     #34d399;
+      --success-bg:  rgba(52,211,153,0.1);
+      --error:       #f87171;
+      --error-bg:    rgba(248,113,113,0.1);
+      --warning:     #f59e0b;
+      --warning-bg:  rgba(245,158,11,0.1);
+    }
+
     body {
+      background: var(--bg);
+      color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      max-width: 600px;
-      margin: 40px auto;
-      padding: 0 20px;
-      background: #111118;
-      color: #e8e8f0;
       font-size: 14px;
       line-height: 1.6;
+      min-height: 100vh;
+      padding: 0 0 60px;
     }
-    h1 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
-    p  { color: #7a7a96; margin-bottom: 24px; }
-    .badge {
-      display: inline-block;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      background: rgba(124,58,237,0.15);
-      color: #9B5DE5;
-      border: 1px solid rgba(124,58,237,0.3);
+
+    /* Header */
+    .page-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .page-header svg { flex-shrink: 0; }
+    .page-title { font-size: 16px; font-weight: 700; }
+    .page-sub   { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+
+    .container { max-width: 680px; margin: 0 auto; padding: 32px 24px; display: flex; flex-direction: column; gap: 28px; }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border-soft);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid var(--border-soft);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .card-title { font-size: 13px; font-weight: 600; flex: 1; }
+    .card-body  { padding: 16px 20px; }
+
+    /* Toggle */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .toggle-label { font-size: 13px; color: var(--text-muted); max-width: 440px; }
+    .toggle-switch {
+      position: relative;
+      width: 40px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
       border-radius: 100px;
-      padding: 2px 8px;
-      vertical-align: middle;
-      margin-left: 8px;
+      cursor: pointer;
+      transition: background 140ms, border-color 140ms;
+    }
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      left: 3px;
+      top: 3px;
+      width: 14px;
+      height: 14px;
+      background: var(--text-dim);
+      border-radius: 50%;
+      transition: transform 140ms, background 140ms;
+    }
+    .toggle-switch input:checked + .toggle-track { background: var(--purple); border-color: var(--purple); }
+    .toggle-switch input:checked + .toggle-track::after { transform: translateX(18px); background: #fff; }
+
+    /* Textarea */
+    textarea {
+      width: 100%;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      padding: 10px 12px;
+      resize: vertical;
+      min-height: 140px;
+      outline: none;
+      transition: border-color 140ms;
+    }
+    textarea:focus { border-color: var(--purple); }
+    .textarea-hint { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+
+    /* Buttons */
+    .btn-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: background 140ms, border-color 140ms, opacity 140ms;
+    }
+    .btn-primary { background: var(--purple); color: #fff; }
+    .btn-primary:hover { background: var(--purple-l); }
+    .btn-ghost { background: transparent; color: var(--text-muted); border-color: var(--border); }
+    .btn-ghost:hover { background: var(--surface-2); color: var(--text); }
+    .btn-danger { background: transparent; color: var(--error); border-color: rgba(248,113,113,0.3); }
+    .btn-danger:hover { background: var(--error-bg); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Banner list */
+    .banner-list { display: flex; flex-direction: column; gap: 10px; }
+    .banner-empty { font-size: 12px; color: var(--text-dim); padding: 8px 0; }
+    .banner-item {
+      background: var(--surface-2);
+      border: 1px solid var(--border-soft);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .banner-text {
+      font-size: 12px;
+      color: var(--text);
+      font-family: 'SF Mono', Consolas, monospace;
+      word-break: break-word;
+      margin-bottom: 6px;
+    }
+    .banner-meta { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+    .banner-actions { display: flex; gap: 6px; }
+    .btn-approve { background: var(--success-bg); color: var(--success); border: 1px solid rgba(52,211,153,0.25); border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .btn-approve:hover { background: rgba(52,211,153,0.2); }
+    .btn-dismiss { background: transparent; color: var(--text-dim); border: 1px solid var(--border-soft); border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer; }
+    .btn-dismiss:hover { color: var(--error); border-color: rgba(248,113,113,0.3); }
+
+    /* Status toast */
+    .save-status {
+      font-size: 12px;
+      padding: 4px 0;
+      min-height: 20px;
+      transition: opacity 200ms;
+    }
+    .save-status.ok    { color: var(--success); }
+    .save-status.error { color: var(--error); }
+
+    /* Badge */
+    .badge {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+      background: var(--purple-faint); color: var(--purple-l);
+      border: 1px solid rgba(124,58,237,0.2); border-radius: 100px; padding: 2px 7px;
     }
   </style>
 </head>
 <body>
-  <h1>Settings <span class="badge">Phase 2</span></h1>
-  <p>
-    The settings page will be implemented in Phase 2. It will let you:<br>
-    · Review and approve unrecognized limit-detection banners<br>
-    · Edit the phrase list in <code>config/limit-signals.json</code><br>
-    · Toggle proactive limit auto-detection on/off
-  </p>
+
+  <header class="page-header">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+      <rect width="28" height="28" rx="7" fill="#7C3AED"/>
+      <text x="14" y="20" font-family="Arial" font-size="13" font-weight="700" fill="white" text-anchor="middle">CH</text>
+    </svg>
+    <div>
+      <div class="page-title">Context Handoff — Settings</div>
+      <div class="page-sub">v0.2.0 · All data stays local</div>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Auto-detect toggle -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Limit Auto-Detection</span>
+        <span class="badge">Phase 2</span>
+      </div>
+      <div class="card-body">
+        <div class="toggle-row">
+          <span class="toggle-label">
+            Automatically watch for usage-limit banners and notify you with a one-click export prompt. Disabling this stops all MutationObserver activity.
+          </span>
+          <label class="toggle-switch" title="Toggle auto-detection">
+            <input type="checkbox" id="autoDetectToggle" checked>
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phrase list editor -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Detection Phrases</span>
+      </div>
+      <div class="card-body">
+        <textarea id="phraseEditor" placeholder="Loading…" spellcheck="false"></textarea>
+        <p class="textarea-hint">One phrase per line. Case-insensitive. If any phrase appears in newly added DOM text, detection fires immediately.</p>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="savePhrases">Save phrases</button>
+          <button class="btn btn-ghost" id="restoreDefaults">Restore defaults</button>
+        </div>
+        <div class="save-status" id="saveStatus"></div>
+      </div>
+    </div>
+
+    <!-- Unrecognized banners -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Unrecognized Banners</span>
+        <span id="bannerCount" class="badge" style="display:none"></span>
+      </div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">
+          When the input-disabled heuristic fires but no phrase matched, the banner text is logged here.
+          Approve it to add the matched phrase to your detection list.
+        </p>
+        <div class="banner-list" id="bannerList">
+          <p class="banner-empty">No unrecognized banners logged yet.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
   <script src="options.js"></script>
 </body>
 </html>

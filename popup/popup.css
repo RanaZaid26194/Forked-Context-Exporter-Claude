@@ -272,7 +272,91 @@ body {
   text-overflow: ellipsis;
 }
 
-/* ── Future action buttons (Phase 2/3 preview) ─────────────────────────────── */
+/* ── Secondary action buttons (Summary + Full Transcript) ───────────────────── */
+.secondary-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-xs);
+}
+
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-xs);
+  padding: 8px 10px;
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--r-sm);
+  color: var(--clr-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+}
+
+.btn-secondary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  transition: background var(--t-fast);
+  pointer-events: none;
+}
+
+.btn-secondary:not(:disabled):hover {
+  background: var(--clr-surface-2);
+  color: var(--clr-text);
+  border-color: var(--clr-border);
+}
+
+.btn-secondary:not(:disabled):active {
+  background: var(--clr-surface);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-secondary.loading .btn-spinner-sm {
+  display: inline-block;
+  animation: spin 0.6s linear infinite;
+}
+
+.btn-spinner-sm {
+  display: none;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(255,255,255,0.3);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Primary btn badge ──────────────────────────────────────────────────────── */
+.btn-badge {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--clr-success);
+  border: 1px solid rgba(52, 211, 153, 0.25);
+  border-radius: 100px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+
+.btn-export.loading .btn-badge { opacity: 0.5; }
+
+/* ── Future action buttons (Phase 3 stub) ───────────────────────────────────── */
 .future-actions {
   display: flex;
   flex-direction: column;
