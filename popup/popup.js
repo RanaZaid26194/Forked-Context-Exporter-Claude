@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', function () {
   var exportSummaryBtn    = document.getElementById('exportSummaryBtn');
   var exportTranscriptBtn = document.getElementById('exportTranscriptBtn');
   var sendToGPTBtn        = document.getElementById('sendToGPTBtn');
+  var sendToGeminiBtn     = document.getElementById('sendToGeminiBtn');
+  var sendToGrokBtn       = document.getElementById('sendToGrokBtn');
   var statusDot    = document.getElementById('statusDot');
   var statusLabel  = document.getElementById('statusLabel');
   var toastEl      = document.getElementById('toast');
@@ -71,7 +73,7 @@ document.addEventListener('DOMContentLoaded', function () {
     exportHandoffBtn.disabled    = disabled;
     exportSummaryBtn.disabled    = disabled;
     exportTranscriptBtn.disabled = disabled;
-    // sendToGPTBtn stays disabled until handoff text exists
+    // Handoff destination buttons stay disabled until handoff text exists
   }
 
   function setLoading(btn, loading) {
@@ -163,17 +165,19 @@ document.addEventListener('DOMContentLoaded', function () {
       var text         = window.ContextHandoff.toHandoffPrompt(conversation, summary);
       if (!text) throw new Error('Handoff prompt generation returned empty output.');
 
-      // Store for "Send to ChatGPT"
+      // Store for handoff destinations
       lastHandoffText = text;
       sendToGPTBtn.disabled = false;
-      var gptHint = document.getElementById('gptHint');
-      if (gptHint) gptHint.textContent = 'Ready — click to fill ChatGPT';
+      sendToGeminiBtn.disabled = false;
+      sendToGrokBtn.disabled = false;
 
-      // Fire the teal glow animation to draw the eye to the now-active button
-      sendToGPTBtn.classList.remove('just-activated');
-      void sendToGPTBtn.offsetWidth; // force reflow to restart animation
-      sendToGPTBtn.classList.add('just-activated');
-      setTimeout(function() { sendToGPTBtn.classList.remove('just-activated'); }, 600);
+      // Fire the glow animations to draw the eye to the now-active buttons
+      [sendToGPTBtn, sendToGeminiBtn, sendToGrokBtn].forEach(function(btn) {
+        btn.classList.remove('just-activated');
+        void btn.offsetWidth; // force reflow to restart animation
+        btn.classList.add('just-activated');
+        setTimeout(function() { btn.classList.remove('just-activated'); }, 600);
+      });
 
       var filename = window.ContextHandoff.safeFilename(conversation.title) + '-handoff.md';
       await clipboardAndDownload(text, filename);
@@ -256,38 +260,37 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 
-  // ── Send to ChatGPT ───────────────────────────────────────────────────────────
+  // ── Handoff Destinations ───────────────────────────────────────────────────
 
-  sendToGPTBtn.addEventListener('click', async function () {
+  async function sendToService(btn, queryPattern, launchUrl, name) {
     if (!lastHandoffText) return;
 
-    setLoading(sendToGPTBtn, true);
-    setStatus('loading', 'Opening ChatGPT…');
+    setLoading(btn, true);
+    setStatus('loading', 'Opening ' + name + '…');
 
     try {
-      // Store the handoff text in chrome.storage.session (cleared on browser restart)
-      // so chatgpt.js can read it after the tab loads.
+      // Store the handoff text in chrome.storage.local (so content scripts can read it)
       await new Promise(function (resolve) {
         chrome.storage.local.set({ pendingHandoff: lastHandoffText }, resolve);
       });
 
-      // Find an existing ChatGPT tab or create one
-      var gptTabs = await chrome.tabs.query({ url: 'https://chatgpt.com/*' });
-      var gptTab;
+      // Find an existing tab or create one
+      var tabs = await chrome.tabs.query({ url: queryPattern });
+      var targetTab;
 
-      if (gptTabs.length > 0) {
-        gptTab = gptTabs[0];
-        await chrome.tabs.update(gptTab.id, { active: true });
+      if (tabs.length > 0) {
+        targetTab = tabs[0];
+        await chrome.tabs.update(targetTab.id, { active: true });
         // Bring its window to front
-        await chrome.windows.update(gptTab.windowId, { focused: true });
+        await chrome.windows.update(targetTab.windowId, { focused: true });
       } else {
-        gptTab = await chrome.tabs.create({ url: 'https://chatgpt.com/', active: true });
+        targetTab = await chrome.tabs.create({ url: launchUrl, active: true });
       }
 
-      setStatus('loading', 'Waiting for ChatGPT input…');
+      setStatus('loading', 'Waiting for ' + name + ' input…');
 
       // Poll until the content script is ready (tab may still be loading)
-      var gptTabId = gptTab.id;
+      var targetTabId = targetTab.id;
       var maxWait  = 15000;
       var interval = 500;
       var elapsed  = 0;
@@ -297,41 +300,67 @@ document.addEventListener('DOMContentLoaded', function () {
         await new Promise(function (r) { setTimeout(r, interval); });
         elapsed += interval;
         try {
-          var pong = await sendToTab(gptTabId, { action: 'PING' });
+          var pong = await sendToTab(targetTabId, { action: 'PING' });
           if (pong && pong.ok) { pongOk = true; break; }
         } catch (e) { /* tab still loading */ }
       }
 
       if (!pongOk) {
-        throw new Error('ChatGPT tab took too long to load. Try again once it\'s fully loaded.');
+        throw new Error(name + ' tab took too long to load. Try again once it\'s fully loaded.');
       }
 
-      // Ask chatgpt.js to fill the input
-      var fillResp = await sendToTab(gptTabId, { action: 'FILL_INPUT', text: lastHandoffText });
+      // Ask content script to fill the input
+      var fillResp = await sendToTab(targetTabId, { action: 'FILL_INPUT', text: lastHandoffText });
 
       if (fillResp && fillResp.ok) {
         setStatus('success', 'Filled — review and press Enter');
-        setMeta('ChatGPT input ready. Review and send manually.');
-        showToast('ChatGPT input filled — review and press Enter to send.', 'success');
+        setMeta(name + ' input ready. Review and send manually.');
+        showToast(name + ' input filled — review and press Enter to send.', 'success');
       } else if (fillResp && fillResp.clipboardFallback) {
-        // chatgpt.js already tried clipboard
         setStatus('warning', 'Couldn\'t auto-fill — check clipboard');
         setMeta('Auto-fill failed. Handoff prompt is in your clipboard — paste manually.');
-        showToast('Couldn\'t auto-fill ChatGPT input — copied to clipboard, paste manually.', 'error');
+        showToast('Couldn\'t auto-fill ' + name + ' input — copied to clipboard, paste manually.', 'error');
       } else {
         throw new Error((fillResp && fillResp.error) || 'Fill failed with unknown error.');
       }
 
     } catch (err) {
-      console.error('[Context Handoff] Send to ChatGPT error:', err);
+      console.error('[Context Handoff] Send to ' + name + ' error:', err);
       // Last-resort clipboard fallback
       try { await navigator.clipboard.writeText(lastHandoffText); } catch (e) {}
       setStatus('error', 'Auto-fill failed');
       setMeta(err.message);
       showToast('Couldn\'t auto-fill — copied to clipboard, paste manually.', 'error');
     } finally {
-      setLoading(sendToGPTBtn, false);
+      setLoading(btn, false);
     }
+  }
+
+  sendToGPTBtn.addEventListener('click', function () {
+    sendToService(
+      sendToGPTBtn,
+      ['https://chatgpt.com/*', 'https://chat.openai.com/*'],
+      'https://chatgpt.com/',
+      'GPT'
+    );
+  });
+
+  sendToGeminiBtn.addEventListener('click', function () {
+    sendToService(
+      sendToGeminiBtn,
+      ['https://gemini.google.com/*'],
+      'https://gemini.google.com/',
+      'Gemini'
+    );
+  });
+
+  sendToGrokBtn.addEventListener('click', function () {
+    sendToService(
+      sendToGrokBtn,
+      ['https://grok.com/*', 'https://x.com/i/grok*'],
+      'https://grok.com/',
+      'Grok'
+    );
   });
 
   // ── Options link ──────────────────────────────────────────────────────────────

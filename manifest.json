@@ -15,7 +15,10 @@
   "host_permissions": [
     "https://claude.ai/*",
     "https://chatgpt.com/*",
-    "https://chat.openai.com/*"
+    "https://chat.openai.com/*",
+    "https://gemini.google.com/*",
+    "https://grok.com/*",
+    "https://x.com/i/grok*"
   ],
 
   "background": {
@@ -48,6 +51,22 @@
         "content-scripts/chatgpt.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": [
+        "content-scripts/shared/scrape-utils.js",
+        "content-scripts/gemini.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://grok.com/*", "https://x.com/i/grok*"],
+      "js": [
+        "content-scripts/shared/scrape-utils.js",
+        "content-scripts/grok.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
 
@@ -62,7 +81,14 @@
   "web_accessible_resources": [
     {
       "resources": ["config/limit-signals.json"],
-      "matches":   ["https://claude.ai/*", "https://chatgpt.com/*", "https://chat.openai.com/*"]
+      "matches":   [
+        "https://claude.ai/*",
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://gemini.google.com/*",
+        "https://grok.com/*",
+        "https://x.com/i/grok*"
+      ]
     }
   ]
 }
