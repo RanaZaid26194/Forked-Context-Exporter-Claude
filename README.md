@@ -17,20 +17,27 @@ A free, local-only Chromium extension (Chrome, Edge, Brave) that scrapes LLM cha
 
 ## Usage
 
-**Phase 1 (current):**
-| Button | What it produces |
-|---|---|
-| Export Full Transcript | Full Markdown transcript (`### You` / `### Claude` headers, fenced code blocks). Copies to clipboard + downloads as `.md`. |
+When you click the extension popup inside a Claude.ai conversation:
 
-**Phase 2 (coming):** Export Summary · Handoff Prompt · automatic limit detection.  
-**Phase 3 (coming):** Send handoff prompt directly to ChatGPT's input (no auto-submit — you review and press Enter yourself).
+1. **Export Handoff Prompt** (Recommended): Builds a structured summary (decisions made, current code state, open items, last 2-3 exchanges verbatim) sized to fit a new chat's context window.
+2. **Export Summary**: Generates a quick markdown summary highlighting decisions and code blocks.
+3. **Full Transcript**: Copies and downloads the entire raw conversation as a clean markdown file.
+4. **Handoff Destinations**: Once you click *Export Handoff Prompt*, three destination buttons activate:
+   - **Send HandOff to GPT**: Opens or switches to ChatGPT, waits for the page to load, and automatically fills the text input.
+   - **Send HandOff to Gemini**: Redirects and fills your handoff prompt in Gemini.
+   - **Send HandOff to Grok**: Redirects and fills your handoff prompt in Grok.
+   
+   *Hard guarantee: The extension will focus and fill the inputs, but never auto-submits. You always review the text and press Enter yourself.*
 
-## Status & roadmap
+## Status & Roadmap
+
+All main development phases are fully complete:
 
 | Phase | Status | Scope |
 |---|---|---|
 | 1 — MVP | ✅ Done | Repo skeleton, `claude.js` scraper, Markdown export, popup UI |
-| 2 — Summarization + limit detection | 🔜 Next | `summarizer.js`, handoff prompt template, limit signals, options page |
-| 3 — ChatGPT fill | 🔜 Planned | `chatgpt.js`, "Send to ChatGPT" button |
+| 2 — Summarization & Limit Detection | ✅ Done | `summarizer.js`, handoff prompt template, automatic limit signals banner, Options page |
+| 3 — Destination Handoffs | ✅ Done | `chatgpt.js`, `gemini.js`, `grok.js`, custom colorful popup buttons, MutationObserver auto-fill |
 
-Selectors target Claude.ai's DOM as of mid-2026. If exports stop working after a Claude UI update, check `content-scripts/claude.js` → `SEL` object and update the selector arrays.
+If exports or auto-fill behaviors stop working after a platform updates its UI, you can update selectors in `content-scripts/claude.js` (for Claude scraping) or the respective destination content scripts (`chatgpt.js`, `gemini.js`, `grok.js`).
+
