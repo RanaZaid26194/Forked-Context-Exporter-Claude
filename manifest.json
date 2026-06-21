@@ -18,7 +18,7 @@
     "https://chat.openai.com/*",
     "https://gemini.google.com/*",
     "https://grok.com/*",
-    "https://x.com/i/grok*"
+    "https://x.com/*"
   ],
 
   "background": {
@@ -61,7 +61,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://grok.com/*", "https://x.com/i/grok*"],
+      "matches": ["https://grok.com/*", "https://x.com/*"],
       "js": [
         "content-scripts/shared/scrape-utils.js",
         "content-scripts/grok.js"
@@ -87,7 +87,7 @@
         "https://chat.openai.com/*",
         "https://gemini.google.com/*",
         "https://grok.com/*",
-        "https://x.com/i/grok*"
+        "https://x.com/*"
       ]
     }
   ]
