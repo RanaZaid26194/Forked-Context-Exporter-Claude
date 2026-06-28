@@ -19,7 +19,7 @@
     "https://chat.openai.com/*",
     "https://gemini.google.com/*",
     "https://grok.com/*",
-    "https://x.com/*"
+    "https://x.com/i/grok*"
   ],
 
   "background": {
@@ -65,7 +65,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://grok.com/*", "https://x.com/*"],
+      "matches": ["https://grok.com/*", "https://x.com/i/grok*"],
       "js": [
         "content-scripts/shared/scrape-utils.js",
         "content-scripts/shared/fill-utils.js",
