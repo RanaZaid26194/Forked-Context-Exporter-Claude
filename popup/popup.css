@@ -559,3 +559,276 @@ body {
 .btn-grok.just-activated {
   animation: grok-activate 0.55s ease-out forwards;
 }
+
+/* ── Claude Button ─────────────────────────────────────────────────────────── */
+/* Warm copper/amber — distinct from GPT teal, Gemini indigo, and Grok white.
+   Matches Claude's own brand warmth without copying their exact palette. */
+:root {
+  --clr-claude:        #d97706;
+  --clr-claude-light:  #fbbf24;
+  --clr-claude-glow:   rgba(217, 119, 6, 0.22);
+  --clr-claude-faint:  rgba(217, 119, 6, 0.08);
+}
+
+.btn-claude:not(:disabled) {
+  border-style: solid !important;
+  border-color: var(--clr-claude) !important;
+  color: var(--clr-claude-light) !important;
+  background: var(--clr-claude-faint) !important;
+  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.12),
+              0 2px 10px rgba(217, 119, 6, 0.08) !important;
+  opacity: 1;
+}
+
+.btn-claude:not(:disabled):hover {
+  background: rgba(217, 119, 6, 0.14) !important;
+  border-color: var(--clr-claude-light) !important;
+  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.2),
+              0 3px 14px rgba(217, 119, 6, 0.14) !important;
+  color: #fff !important;
+}
+
+.btn-claude:not(:disabled):active {
+  background: var(--clr-claude-faint) !important;
+  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.15) !important;
+}
+
+@keyframes claude-activate {
+  0%   { box-shadow: 0 0 0 0   rgba(217, 119, 6, 0.55); }
+  60%  { box-shadow: 0 0 0 8px rgba(217, 119, 6, 0); }
+  100% { box-shadow: 0 0 0 8px rgba(217, 119, 6, 0); }
+}
+
+.btn-claude.just-activated {
+  animation: claude-activate 0.55s ease-out forwards;
+}
+
+/* ── Copy / Export preference row ──────────────────────────────────────────── */
+.pref-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  padding: 6px var(--sp-sm);
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border-soft);
+  border-radius: var(--r-sm);
+}
+
+.pref-label {
+  font-size: 11px;
+  color: var(--clr-text-muted);
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+.pref-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--clr-text-sec);
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+/* Hide native checkbox, replace with custom mark */
+.pref-check input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.pref-check-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid var(--clr-border);
+  border-radius: 3px;
+  background: transparent;
+  transition: background var(--t-fast), border-color var(--t-fast);
+  flex-shrink: 0;
+}
+
+.pref-check input[type="checkbox"]:checked + .pref-check-mark {
+  background: var(--clr-purple);
+  border-color: var(--clr-purple);
+}
+
+.pref-check input[type="checkbox"]:checked + .pref-check-mark::after {
+  content: '';
+  display: block;
+  width: 4px;
+  height: 7px;
+  border: 1.5px solid #fff;
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg) translateY(-1px);
+}
+
+.pref-check:hover .pref-check-mark {
+  border-color: var(--clr-purple-light);
+}
+
+/* ── Confirmation modal ─────────────────────────────────────────────────────── */
+/* Full-popup overlay — fades in when .visible is added, fades out when removed.
+   Sits above everything except the toast. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 18, 0.82);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-md);
+  z-index: 90;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-base);
+}
+
+.modal-backdrop.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal {
+  width: 100%;
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--r-lg);
+  padding: var(--sp-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-sm);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  transform: translateY(6px);
+  transition: transform var(--t-base);
+}
+
+.modal-backdrop.visible .modal {
+  transform: translateY(0);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-xs);
+}
+
+.modal-icon {
+  font-size: 14px;
+  color: var(--clr-warning);
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.modal-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--clr-text);
+  letter-spacing: -0.01em;
+}
+
+.modal-body {
+  font-size: 11.5px;
+  color: var(--clr-text-sec);
+  line-height: 1.55;
+}
+
+/* "Don't ask me again" — same custom checkbox pattern as pref-row */
+.modal-never-again {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--clr-text-muted);
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+}
+
+.modal-never-again input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.modal-check-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid var(--clr-border);
+  border-radius: 3px;
+  background: transparent;
+  transition: background var(--t-fast), border-color var(--t-fast);
+  flex-shrink: 0;
+}
+
+.modal-never-again input[type="checkbox"]:checked + .modal-check-mark {
+  background: var(--clr-purple);
+  border-color: var(--clr-purple);
+}
+
+.modal-never-again input[type="checkbox"]:checked + .modal-check-mark::after {
+  content: '';
+  display: block;
+  width: 4px;
+  height: 7px;
+  border: 1.5px solid #fff;
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg) translateY(-1px);
+}
+
+.modal-never-again:hover .modal-check-mark {
+  border-color: var(--clr-purple-light);
+}
+
+.modal-actions {
+  display: flex;
+  gap: var(--sp-xs);
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+
+.modal-btn {
+  padding: 6px 14px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+
+.modal-btn-cancel {
+  background: transparent;
+  color: var(--clr-text-muted);
+  border-color: var(--clr-border);
+}
+
+.modal-btn-cancel:hover {
+  background: var(--clr-surface-2);
+  color: var(--clr-text);
+}
+
+.modal-btn-proceed {
+  background: var(--clr-purple);
+  color: #fff;
+  border-color: var(--clr-purple);
+}
+
+.modal-btn-proceed:hover {
+  background: var(--clr-purple-light);
+  border-color: var(--clr-purple-light);
+}

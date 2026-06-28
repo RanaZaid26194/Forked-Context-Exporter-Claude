@@ -1,26 +1,35 @@
-// options/options.js — Context Handoff settings page (Phase 2)
+// options/options.js — Context Handoff settings page
 //
-// Manages:
-//   - autoDetectEnabled toggle (chrome.storage.local)
-//   - limitPhrases phrase list editor (read/write/restore defaults)
-//   - unrecognizedBanners review list (approve → add to phrases, dismiss → remove)
+// Manages four toggles:
+//   - autoDetectEnabled   — MutationObserver limit detection on/off
+//   - autoPasteEnabled    — auto-fill the destination input on/off
+//   - autoGoogleSignIn    — auto-click "Continue with Google" after logout
+//   - skipLogoutConfirm   — skip the "Switch Claude Account?" modal
+//
+// Plus the phrase list editor and unrecognized banners review list.
 
 'use strict';
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
-var KEY_PHRASES  = 'limitPhrases';
-var KEY_AUTO     = 'autoDetectEnabled';
-var KEY_BANNERS  = 'unrecognizedBanners';
-var JSON_URL     = chrome.runtime.getURL('config/limit-signals.json');
+var KEY_PHRASES       = 'limitPhrases';
+var KEY_AUTO          = 'autoDetectEnabled';
+var KEY_BANNERS       = 'unrecognizedBanners';
+var KEY_AUTO_PASTE    = 'autoPasteEnabled';
+var KEY_GOOGLE_SIGNIN = 'autoGoogleSignIn';
+var KEY_SKIP_CONFIRM  = 'skipLogoutConfirm';
+var JSON_URL          = chrome.runtime.getURL('config/limit-signals.json');
 
 // ── Element refs ──────────────────────────────────────────────────────────────
-var autoToggle    = document.getElementById('autoDetectToggle');
-var phraseEditor  = document.getElementById('phraseEditor');
-var savePhrases   = document.getElementById('savePhrases');
-var restoreBtn    = document.getElementById('restoreDefaults');
-var saveStatus    = document.getElementById('saveStatus');
-var bannerList    = document.getElementById('bannerList');
-var bannerCount   = document.getElementById('bannerCount');
+var autoDetectEl        = document.getElementById('autoDetectToggle');
+var autoPasteEl         = document.getElementById('autoPasteToggle');
+var autoGoogleSignInEl  = document.getElementById('autoGoogleSignInToggle');
+var skipLogoutConfirmEl = document.getElementById('skipLogoutConfirmToggle');
+var phraseEditor        = document.getElementById('phraseEditor');
+var savePhrases         = document.getElementById('savePhrases');
+var restoreBtn          = document.getElementById('restoreDefaults');
+var saveStatus          = document.getElementById('saveStatus');
+var bannerList          = document.getElementById('bannerList');
+var bannerCount         = document.getElementById('bannerCount');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -33,12 +42,6 @@ function storageGet(keys) {
 function storageSet(items) {
   return new Promise(function (resolve) {
     chrome.storage.local.set(items, resolve);
-  });
-}
-
-function storageRemove(keys) {
-  return new Promise(function (resolve) {
-    chrome.storage.local.remove(keys, resolve);
   });
 }
 
@@ -77,8 +80,8 @@ function renderBanners(banners) {
 
   bannerCount.textContent = banners.length + ' pending';
   bannerCount.style.display = '';
-
   bannerList.innerHTML = '';
+
   banners.forEach(function (banner, idx) {
     var item = document.createElement('div');
     item.className = 'banner-item';
@@ -97,7 +100,7 @@ function renderBanners(banners) {
     bannerList.appendChild(item);
   });
 
-  // Approve: extract a short phrase from banner text, add to phrases list, remove banner
+  // Approve — extract a short phrase, add to list, remove the banner
   bannerList.querySelectorAll('.btn-approve').forEach(function (btn) {
     btn.addEventListener('click', async function () {
       var idx     = parseInt(btn.dataset.idx, 10);
@@ -107,7 +110,6 @@ function renderBanners(banners) {
       var banner  = banners[idx];
       if (!banner) return;
 
-      // Extract the first meaningful chunk of the banner as the new phrase (up to 60 chars)
       var phrase = banner.text.split(/[.!?\n]/)[0].trim().slice(0, 60);
       if (phrase && phrases.indexOf(phrase) === -1) {
         phrases.push(phrase);
@@ -122,7 +124,7 @@ function renderBanners(banners) {
     });
   });
 
-  // Dismiss: just remove from logged list
+  // Dismiss — just remove from logged list
   bannerList.querySelectorAll('.btn-dismiss').forEach(function (btn) {
     btn.addEventListener('click', async function () {
       var idx     = parseInt(btn.dataset.idx, 10);
@@ -146,16 +148,20 @@ function escapeHtml(str) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 (async function init() {
-  var result = await storageGet([KEY_AUTO, KEY_PHRASES, KEY_BANNERS]);
+  var result = await storageGet([
+    KEY_AUTO, KEY_AUTO_PASTE, KEY_GOOGLE_SIGNIN, KEY_SKIP_CONFIRM,
+    KEY_PHRASES, KEY_BANNERS,
+  ]);
 
-  // Toggle
-  var autoEnabled = result[KEY_AUTO] !== false; // default true
-  autoToggle.checked = autoEnabled;
+  // General toggles
+  autoDetectEl.checked       = result[KEY_AUTO]          !== false; // default true
+  autoPasteEl.checked        = result[KEY_AUTO_PASTE]    !== false; // default true
+  autoGoogleSignInEl.checked = result[KEY_GOOGLE_SIGNIN] !== false; // default true
+  skipLogoutConfirmEl.checked = result[KEY_SKIP_CONFIRM] === true;  // default false
 
-  // Phrase editor
+  // Phrase editor — seed from bundled JSON on first run
   var phrases = result[KEY_PHRASES];
   if (!phrases || phrases.length === 0) {
-    // Seed from bundled JSON
     try {
       phrases = await fetchDefaultPhrases();
       await storageSet({ [KEY_PHRASES]: phrases });
@@ -169,12 +175,47 @@ function escapeHtml(str) {
   renderBanners(result[KEY_BANNERS]);
 })();
 
-// ── Event handlers ────────────────────────────────────────────────────────────
+// ── Toggle handlers ───────────────────────────────────────────────────────────
 
-autoToggle.addEventListener('change', async function () {
-  await storageSet({ [KEY_AUTO]: autoToggle.checked });
-  showStatus(autoToggle.checked ? 'Auto-detect enabled.' : 'Auto-detect disabled.', 'ok');
+autoDetectEl.addEventListener('change', async function () {
+  await storageSet({ [KEY_AUTO]: autoDetectEl.checked });
+  showStatus(
+    autoDetectEl.checked ? 'Auto-detect enabled.' : 'Auto-detect disabled.',
+    'ok'
+  );
 });
+
+autoPasteEl.addEventListener('change', async function () {
+  await storageSet({ [KEY_AUTO_PASTE]: autoPasteEl.checked });
+  showStatus(
+    autoPasteEl.checked
+      ? 'Auto-paste enabled — handoff prompt will be filled automatically.'
+      : 'Auto-paste disabled — tabs will open but nothing will be pasted.',
+    'ok'
+  );
+});
+
+autoGoogleSignInEl.addEventListener('change', async function () {
+  await storageSet({ [KEY_GOOGLE_SIGNIN]: autoGoogleSignInEl.checked });
+  showStatus(
+    autoGoogleSignInEl.checked
+      ? 'Will auto-click Continue with Google after logout.'
+      : 'You\'ll need to click Continue with Google manually.',
+    'ok'
+  );
+});
+
+skipLogoutConfirmEl.addEventListener('change', async function () {
+  await storageSet({ [KEY_SKIP_CONFIRM]: skipLogoutConfirmEl.checked });
+  showStatus(
+    skipLogoutConfirmEl.checked
+      ? 'Logout confirmation skipped from now on.'
+      : 'Logout confirmation re-enabled.',
+    'ok'
+  );
+});
+
+// ── Phrase editor handlers ────────────────────────────────────────────────────
 
 savePhrases.addEventListener('click', async function () {
   var phrases = phrasesFromEditor();
@@ -200,9 +241,12 @@ restoreBtn.addEventListener('click', async function () {
   }
 });
 
-// Live-update banner list when storage changes (e.g. new banner logged while options page is open)
+// Live-update banner list when storage changes while the options page is open
 chrome.storage.onChanged.addListener(function (changes, area) {
-  if (area === 'local' && changes[KEY_BANNERS]) {
-    renderBanners(changes[KEY_BANNERS].newValue);
+  if (area !== 'local') return;
+  if (changes[KEY_BANNERS]) renderBanners(changes[KEY_BANNERS].newValue);
+  // Sync skip-confirm toggle if the popup's "never ask again" checkbox changed it
+  if (changes[KEY_SKIP_CONFIRM]) {
+    skipLogoutConfirmEl.checked = changes[KEY_SKIP_CONFIRM].newValue === true;
   }
 });

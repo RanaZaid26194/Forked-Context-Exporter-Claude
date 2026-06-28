@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Context Handoff",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "description": "Exports LLM chat conversations, detects usage limits, and prepares handoff prompts for continuing in another chat. 100% local — no API keys, no telemetry.",
 
   "permissions": [
@@ -9,7 +9,8 @@
     "storage",
     "downloads",
     "notifications",
-    "scripting"
+    "scripting",
+    "tabs"
   ],
 
   "host_permissions": [
@@ -40,6 +41,7 @@
       "matches": ["https://claude.ai/*"],
       "js": [
         "content-scripts/shared/scrape-utils.js",
+        "content-scripts/shared/fill-utils.js",
         "content-scripts/claude.js"
       ],
       "run_at": "document_idle"
@@ -48,6 +50,7 @@
       "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
       "js": [
         "content-scripts/shared/scrape-utils.js",
+        "content-scripts/shared/fill-utils.js",
         "content-scripts/chatgpt.js"
       ],
       "run_at": "document_idle"
@@ -56,6 +59,7 @@
       "matches": ["https://gemini.google.com/*"],
       "js": [
         "content-scripts/shared/scrape-utils.js",
+        "content-scripts/shared/fill-utils.js",
         "content-scripts/gemini.js"
       ],
       "run_at": "document_idle"
@@ -64,6 +68,7 @@
       "matches": ["https://grok.com/*", "https://x.com/*"],
       "js": [
         "content-scripts/shared/scrape-utils.js",
+        "content-scripts/shared/fill-utils.js",
         "content-scripts/grok.js"
       ],
       "run_at": "document_idle"
