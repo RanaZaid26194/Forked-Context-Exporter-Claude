@@ -1,17 +1,39 @@
 // popup/popup.js
-// Context Handoff popup — Phase 3 (final)
+// Context Handoff popup — Phase 4
 //
 // Four export modes:
 //   1. Handoff Prompt  (primary) — scrape + summarize → toHandoffPrompt()
 //   2. Export Summary  (secondary) — scrape + summarize → toSummaryMarkdown()
 //   3. Full Transcript (secondary) — scrape → toMarkdown()
-//   4. Send to ChatGPT (enabled once handoff prompt has been generated)
+//   4. Send to ChatGPT / Gemini / Grok / Claude (enabled once handoff prompt
+//      has been generated)
+//
+// Copy/Export preference row:
+//   Two checkboxes — "Copy" and "Download" — saved to chrome.storage.local as
+//   { copyEnabled, exportEnabled }. Both true by default. Every export click
+//   checks the saved preference and only does the action(s) that are enabled.
+//
+// Claude destination — account-switch flow:
+//   Logs out the source tab, optionally auto-clicks "Sign in with Google",
+//   waits for the user to authenticate, then navigates to claude.ai/new
+//   and fills the handoff prompt. A skipLogoutConfirm preference suppresses
+//   the confirmation modal after the user ticks "never ask again".
 //
 // Requires lib/formatter.js + lib/summarizer.js loaded first via popup.html.
 
 'use strict';
 
 document.addEventListener('DOMContentLoaded', function () {
+
+  // Open a persistent port to the background service worker.
+  // Two things this does:
+  //   1. Keeps the service worker alive for the duration of the popup session
+  //   2. More importantly — keeps THIS popup window alive even when the user
+  //      clicks outside it, because Chrome only closes the popup on user
+  //      navigation, not while JS is actively running async work.
+  // Without this, the popup's JS context is destroyed mid-flow the moment
+  // Chrome decides to close it (which happens almost immediately on outside click).
+  var _bgPort = chrome.runtime.connect({ name: 'popup-keepalive' });
 
   // ── Element refs ─────────────────────────────────────────────────────────────
   var exportHandoffBtn    = document.getElementById('exportHandoffBtn');
@@ -20,6 +42,9 @@ document.addEventListener('DOMContentLoaded', function () {
   var sendToGPTBtn        = document.getElementById('sendToGPTBtn');
   var sendToGeminiBtn     = document.getElementById('sendToGeminiBtn');
   var sendToGrokBtn       = document.getElementById('sendToGrokBtn');
+  var sendToClaudeBtn     = document.getElementById('sendToClaudeBtn');
+  var copyPrefCheckbox    = document.getElementById('copyPrefCheckbox');
+  var exportPrefCheckbox  = document.getElementById('exportPrefCheckbox');
   var statusDot    = document.getElementById('statusDot');
   var statusLabel  = document.getElementById('statusLabel');
   var toastEl      = document.getElementById('toast');
@@ -27,10 +52,26 @@ document.addEventListener('DOMContentLoaded', function () {
   var metaEl       = document.getElementById('convMeta');
   var optionsLink  = document.getElementById('optionsLink');
 
+  // Confirmation modal elements
+  var confirmModal       = document.getElementById('confirmModal');
+  var confirmProceedBtn  = document.getElementById('confirmProceedBtn');
+  var confirmCancelBtn   = document.getElementById('confirmCancelBtn');
+  var confirmNeverAgain  = document.getElementById('confirmNeverAgain');
+
   var toastTimer = null;
 
-  // The most recently generated handoff prompt text — stored so "Send to ChatGPT"
-  // can use it without re-scraping.
+  // Copy/Export preference — loaded from storage during init(), defaults to
+  // both enabled (matches original behaviour) until storage responds.
+  var prefs = {
+    copyEnabled:       true,
+    exportEnabled:     true,
+    autoPasteEnabled:  true,   // controls whether FILL_INPUT is sent to destination tabs
+    skipLogoutConfirm: false,
+    autoGoogleSignIn:  true,
+  };
+
+  // The most recently generated handoff prompt text — stored so destination
+  // buttons can use it without re-scraping.
   var lastHandoffText = null;
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -43,7 +84,6 @@ document.addEventListener('DOMContentLoaded', function () {
   function showToast(text, type) {
     toastMsg.textContent = text;
     toastEl.dataset.type = type || 'success';
-    // Update icon to match type
     var iconEl = document.querySelector('.toast-icon');
     if (iconEl) iconEl.textContent = (type === 'error') ? '✗' : (type === 'warning') ? '⚠' : '✓';
     toastEl.classList.add('visible');
@@ -96,18 +136,132 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   /**
-   * Write text to clipboard and trigger a .md file download.
+   * Write text to the clipboard only.
    */
-  async function clipboardAndDownload(text, filename) {
+  async function copyToClipboard(text) {
     try {
       await navigator.clipboard.writeText(text);
+      return true;
     } catch (e) {
       console.warn('[Context Handoff] Clipboard write failed:', e);
+      return false;
     }
+  }
+
+  /**
+   * Trigger a .md file download only — no clipboard write.
+   */
+  async function downloadFile(text, filename) {
     var blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
     var url  = URL.createObjectURL(blob);
     await chrome.downloads.download({ url: url, filename: filename, saveAs: false });
     setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+  }
+
+  /**
+   * Runs copy and/or download based on the saved Copy/Export preference.
+   * Returns a small descriptor so callers can tailor their status/toast text.
+   */
+  async function exportText(text, filename) {
+    var didCopy   = false;
+    var didExport = false;
+
+    if (prefs.copyEnabled) {
+      didCopy = await copyToClipboard(text);
+    }
+    if (prefs.exportEnabled) {
+      await downloadFile(text, filename);
+      didExport = true;
+    }
+
+    return { didCopy: didCopy, didExport: didExport };
+  }
+
+  /**
+   * Builds a short human-readable description of what just happened.
+   */
+  function describeExportResult(result, filename) {
+    if (result.didCopy && result.didExport) return 'copied + downloaded as ' + filename;
+    if (result.didExport) return 'downloaded as ' + filename;
+    if (result.didCopy) return 'copied to clipboard';
+    return 'done (copy and download are both off — enable one in the preferences row)';
+  }
+
+  /**
+   * Load all preferences from storage and reflect them in the UI.
+   * Defaults: copyEnabled=true, exportEnabled=true, skipLogoutConfirm=false,
+   * autoGoogleSignIn=true.
+   */
+  async function loadPrefs() {
+    try {
+      var result = await new Promise(function (resolve) {
+        chrome.storage.local.get(
+          ['copyEnabled', 'exportEnabled', 'autoPasteEnabled', 'skipLogoutConfirm', 'autoGoogleSignIn'],
+          resolve
+        );
+      });
+      prefs.copyEnabled       = (result.copyEnabled       !== undefined) ? result.copyEnabled       : true;
+      prefs.exportEnabled     = (result.exportEnabled     !== undefined) ? result.exportEnabled     : true;
+      prefs.autoPasteEnabled  = (result.autoPasteEnabled  !== undefined) ? result.autoPasteEnabled  : true;
+      prefs.skipLogoutConfirm = (result.skipLogoutConfirm !== undefined) ? result.skipLogoutConfirm : false;
+      prefs.autoGoogleSignIn  = (result.autoGoogleSignIn  !== undefined) ? result.autoGoogleSignIn  : true;
+    } catch (e) {
+      console.warn('[Context Handoff] Failed to load preferences, using defaults:', e);
+    }
+    copyPrefCheckbox.checked   = prefs.copyEnabled;
+    exportPrefCheckbox.checked = prefs.exportEnabled;
+  }
+
+  /**
+   * Persist all preferences to storage. Fire-and-forget.
+   */
+  function savePrefs() {
+    chrome.storage.local.set({
+      copyEnabled:       prefs.copyEnabled,
+      exportEnabled:     prefs.exportEnabled,
+      autoPasteEnabled:  prefs.autoPasteEnabled,
+      skipLogoutConfirm: prefs.skipLogoutConfirm,
+      autoGoogleSignIn:  prefs.autoGoogleSignIn,
+    });
+  }
+
+  // ── Confirmation modal ────────────────────────────────────────────────────────
+
+  /**
+   * Show the logout confirmation modal. Returns a Promise that resolves to
+   * true (user clicked Continue) or false (user cancelled).
+   * If skipLogoutConfirm is already set, resolves to true immediately.
+   */
+  function askLogoutConfirm() {
+    if (prefs.skipLogoutConfirm) return Promise.resolve(true);
+
+    return new Promise(function (resolve) {
+      confirmNeverAgain.checked = false;
+      confirmModal.classList.add('visible');
+
+      function onProceed() {
+        cleanup();
+        if (confirmNeverAgain.checked) {
+          prefs.skipLogoutConfirm = true;
+          savePrefs();
+        }
+        resolve(true);
+      }
+
+      function onCancel() {
+        cleanup();
+        resolve(false);
+      }
+
+      function cleanup() {
+        confirmModal.classList.remove('visible');
+        confirmProceedBtn.removeEventListener('click', onProceed);
+        confirmCancelBtn.removeEventListener('click', onCancel);
+      }
+
+      confirmProceedBtn.addEventListener('click', onProceed);
+      confirmCancelBtn.addEventListener('click', onCancel);
+    });
   }
 
   // ── Init: detect current tab ──────────────────────────────────────────────────
@@ -119,6 +273,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Clear limit-detection badge now that popup is open
     try { chrome.runtime.sendMessage({ action: 'POPUP_OPENED' }); } catch (e) { /* */ }
+
+    await loadPrefs();
 
     var tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     activeTab = tabs[0];
@@ -151,6 +307,29 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   })();
 
+  // ── Preference checkboxes ──────────────────────────────────────────────────
+
+  copyPrefCheckbox.addEventListener('change', function () {
+    // Both off is not a valid state — revert and tell the user why.
+    if (!copyPrefCheckbox.checked && !exportPrefCheckbox.checked) {
+      copyPrefCheckbox.checked = true;
+      showToast('At least one of Copy or Download must stay enabled.', 'warning');
+      return;
+    }
+    prefs.copyEnabled = copyPrefCheckbox.checked;
+    savePrefs();
+  });
+
+  exportPrefCheckbox.addEventListener('change', function () {
+    if (!exportPrefCheckbox.checked && !copyPrefCheckbox.checked) {
+      exportPrefCheckbox.checked = true;
+      showToast('At least one of Copy or Download must stay enabled.', 'warning');
+      return;
+    }
+    prefs.exportEnabled = exportPrefCheckbox.checked;
+    savePrefs();
+  });
+
   // ── Export: Handoff Prompt (primary) ─────────────────────────────────────────
 
   exportHandoffBtn.addEventListener('click', async function () {
@@ -167,12 +346,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
       // Store for handoff destinations
       lastHandoffText = text;
-      sendToGPTBtn.disabled = false;
+      chrome.storage.local.set({ pendingHandoff: text });
+      sendToGPTBtn.disabled    = false;
       sendToGeminiBtn.disabled = false;
-      sendToGrokBtn.disabled = false;
+      sendToGrokBtn.disabled   = false;
+      sendToClaudeBtn.disabled = false;
 
       // Fire the glow animations to draw the eye to the now-active buttons
-      [sendToGPTBtn, sendToGeminiBtn, sendToGrokBtn].forEach(function(btn) {
+      [sendToGPTBtn, sendToGeminiBtn, sendToGrokBtn, sendToClaudeBtn].forEach(function(btn) {
         btn.classList.remove('just-activated');
         void btn.offsetWidth; // force reflow to restart animation
         btn.classList.add('just-activated');
@@ -180,13 +361,11 @@ document.addEventListener('DOMContentLoaded', function () {
       });
 
       var filename = window.ContextHandoff.safeFilename(conversation.title) + '-handoff.md';
-      await clipboardAndDownload(text, filename);
+      var result   = await exportText(text, filename);
 
       var turnCount = conversation.turns.length;
       setStatus('success', turnCount + ' turns exported — handoff ready');
-      setMeta('"' + conversation.title + '" → ' + filename);
-      // No toast here: the button activation and status line are the feedback.
-      // A toast would compete for space with the button that just became available.
+      setMeta('"' + conversation.title + '" → ' + describeExportResult(result, filename));
 
     } catch (err) {
       console.error('[Context Handoff] Handoff export error:', err);
@@ -213,11 +392,11 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!text) throw new Error('Summary generation returned empty output.');
 
       var filename = window.ContextHandoff.safeFilename(conversation.title) + '-summary.md';
-      await clipboardAndDownload(text, filename);
+      var result   = await exportText(text, filename);
 
       setStatus('success', 'Summary exported');
-      setMeta('"' + conversation.title + '" → ' + filename);
-      showToast('Summary copied + downloaded as ' + filename, 'success');
+      setMeta('"' + conversation.title + '" → ' + describeExportResult(result, filename));
+      showToast('Summary ' + describeExportResult(result, filename), 'success');
 
     } catch (err) {
       console.error('[Context Handoff] Summary export error:', err);
@@ -243,12 +422,12 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!text) throw new Error('Formatter returned empty output.');
 
       var filename = window.ContextHandoff.safeFilename(conversation.title) + '.md';
-      await clipboardAndDownload(text, filename);
+      var result   = await exportText(text, filename);
 
       var turnCount = conversation.turns.length;
       setStatus('success', turnCount + ' turns exported');
-      setMeta('"' + conversation.title + '" → ' + filename);
-      showToast('Transcript copied + downloaded as ' + filename, 'success');
+      setMeta('"' + conversation.title + '" → ' + describeExportResult(result, filename));
+      showToast('Transcript ' + describeExportResult(result, filename), 'success');
 
     } catch (err) {
       console.error('[Context Handoff] Transcript export error:', err);
@@ -262,78 +441,57 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ── Handoff Destinations ───────────────────────────────────────────────────
 
-  async function sendToService(btn, queryPattern, launchUrl, name) {
-    if (!lastHandoffText) return;
-
-    setLoading(btn, true);
-    setStatus('loading', 'Opening ' + name + '…');
-
-    try {
-      // Store the handoff text in chrome.storage.local (so content scripts can read it)
-      await new Promise(function (resolve) {
-        chrome.storage.local.set({ pendingHandoff: lastHandoffText }, resolve);
-      });
-
-      // Find an existing tab or create one
-      var tabs = await chrome.tabs.query({ url: queryPattern });
-      var targetTab;
-
-      if (tabs.length > 0) {
-        targetTab = tabs[0];
-        await chrome.tabs.update(targetTab.id, { active: true });
-        // Bring its window to front
-        await chrome.windows.update(targetTab.windowId, { focused: true });
-      } else {
-        targetTab = await chrome.tabs.create({ url: launchUrl, active: true });
-      }
-
-      setStatus('loading', 'Waiting for ' + name + ' input…');
-
-      // Poll until the content script is ready (tab may still be loading)
-      var targetTabId = targetTab.id;
-      var maxWait  = 15000;
-      var interval = 500;
-      var elapsed  = 0;
-      var pongOk   = false;
-
-      while (elapsed < maxWait) {
-        await new Promise(function (r) { setTimeout(r, interval); });
-        elapsed += interval;
-        try {
-          var pong = await sendToTab(targetTabId, { action: 'PING' });
-          if (pong && pong.ok) { pongOk = true; break; }
-        } catch (e) { /* tab still loading */ }
-      }
-
-      if (!pongOk) {
-        throw new Error(name + ' tab took too long to load. Try again once it\'s fully loaded.');
-      }
-
-      // Ask content script to fill the input
-      var fillResp = await sendToTab(targetTabId, { action: 'FILL_INPUT', text: lastHandoffText });
-
-      if (fillResp && fillResp.ok) {
-        setStatus('success', 'Filled — review and press Enter');
-        setMeta(name + ' input ready. Review and send manually.');
-        showToast(name + ' input filled — review and press Enter to send.', 'success');
-      } else if (fillResp && fillResp.clipboardFallback) {
-        setStatus('warning', 'Couldn\'t auto-fill — check clipboard');
-        setMeta('Auto-fill failed. Handoff prompt is in your clipboard — paste manually.');
-        showToast('Couldn\'t auto-fill ' + name + ' input — copied to clipboard, paste manually.', 'error');
-      } else {
-        throw new Error((fillResp && fillResp.error) || 'Fill failed with unknown error.');
-      }
-
-    } catch (err) {
-      console.error('[Context Handoff] Send to ' + name + ' error:', err);
-      // Last-resort clipboard fallback
-      try { await navigator.clipboard.writeText(lastHandoffText); } catch (e) {}
-      setStatus('error', 'Auto-fill failed');
-      setMeta(err.message);
-      showToast('Couldn\'t auto-fill — copied to clipboard, paste manually.', 'error');
-    } finally {
-      setLoading(btn, false);
+  // Fires SEND_TO_SERVICE in background.js and polls storage for status.
+  // Background owns ALL tab work — popup just shows progress.
+  async function sendToService(btn, queryUrls, launchUrl, urlFragment, name) {
+    if (!lastHandoffText) {
+      showToast('Generate a handoff prompt first.', 'warning');
+      return;
     }
+    setLoading(btn, true);
+    setStatus('loading', 'Opening ' + name + '\u2026');
+
+    // Clear stale status from previous run
+    await new Promise(function (r) { chrome.storage.local.remove('bgStatus', r); });
+
+    await new Promise(function (r) {
+      chrome.storage.local.set({ pendingHandoff: lastHandoffText }, r);
+    });
+
+    chrome.runtime.sendMessage({
+      action:      'SEND_TO_SERVICE',
+      name:        name,
+      launchUrl:   launchUrl,
+      queryUrls:   queryUrls,
+      urlFragment: urlFragment,
+      text:        lastHandoffText,
+      autoPaste:   prefs.autoPasteEnabled,
+    });
+
+    // Poll bgStatus — background writes here as it progresses
+    var maxPoll = 30000;
+    var elapsed = 0;
+    while (elapsed < maxPoll) {
+      await new Promise(function (r) { setTimeout(r, 700); });
+      elapsed += 700;
+      var result = await new Promise(function (r) { chrome.storage.local.get(['bgStatus'], r); });
+      var st = result.bgStatus;
+      if (!st) continue;
+      setStatus(st.state, st.label);
+      if (st.meta) setMeta(st.meta);
+      if (st.state === 'success' || st.state === 'error' || st.state === 'warning') {
+        if (st.state !== 'success') {
+          
+          try { await navigator.clipboard.writeText(lastHandoffText); } catch (e) {}
+          showToast(st.meta || 'Couldn\'t auto-fill \u2014 copied to clipboard.', 'error');
+        } else {
+          showToast(st.label, 'success');
+        }
+        break;
+      }
+    }
+    chrome.storage.local.remove('bgStatus');
+    setLoading(btn, false);
   }
 
   sendToGPTBtn.addEventListener('click', function () {
@@ -341,6 +499,7 @@ document.addEventListener('DOMContentLoaded', function () {
       sendToGPTBtn,
       ['https://chatgpt.com/*', 'https://chat.openai.com/*'],
       'https://chatgpt.com/',
+      'chatgpt.com',
       'GPT'
     );
   });
@@ -350,6 +509,7 @@ document.addEventListener('DOMContentLoaded', function () {
       sendToGeminiBtn,
       ['https://gemini.google.com/*'],
       'https://gemini.google.com/',
+      'gemini.google.com',
       'Gemini'
     );
   });
@@ -357,10 +517,62 @@ document.addEventListener('DOMContentLoaded', function () {
   sendToGrokBtn.addEventListener('click', function () {
     sendToService(
       sendToGrokBtn,
-      ['https://grok.com/*', 'https://x.com/i/grok*'],
+      ['https://grok.com/*'],
       'https://grok.com/',
+      'grok.com',
       'Grok'
     );
+  });
+
+  // Fires SEND_TO_CLAUDE in background.js. Background handles logout,
+  // Google sign-in, auth detection, navigation, and fill entirely on its own.
+  sendToClaudeBtn.addEventListener('click', async function () {
+    if (!lastHandoffText || !activeTab) {
+      if (!lastHandoffText) showToast('Generate a handoff prompt first.', 'warning');
+      return;
+    }
+
+    var proceed = await askLogoutConfirm();
+    if (!proceed) return;
+
+    setLoading(sendToClaudeBtn, true);
+    setStatus('loading', 'Logging out of Claude\u2026');
+    setMeta('');
+
+    await new Promise(function (r) { chrome.storage.local.remove('bgStatus', r); });
+    await new Promise(function (r) { chrome.storage.local.set({ pendingHandoff: lastHandoffText }, r); });
+
+    chrome.runtime.sendMessage({
+      action:           'SEND_TO_CLAUDE',
+      tabId:            activeTab.id,
+      text:             lastHandoffText,
+      autoPaste:        prefs.autoPasteEnabled,
+      autoGoogleSignIn: prefs.autoGoogleSignIn,
+    });
+
+    // Poll bgStatus — 130s to cover the full login wait
+    var maxPoll = 130000;
+    var elapsed = 0;
+    while (elapsed < maxPoll) {
+      await new Promise(function (r) { setTimeout(r, 800); });
+      elapsed += 800;
+      var result = await new Promise(function (r) { chrome.storage.local.get(['bgStatus'], r); });
+      var st = result.bgStatus;
+      if (!st) continue;
+      setStatus(st.state, st.label);
+      if (st.meta) setMeta(st.meta);
+      if (st.state === 'success' || st.state === 'error' || st.state === 'warning') {
+        if (st.state !== 'success') {
+          try { await navigator.clipboard.writeText(lastHandoffText); } catch (e) {}
+          showToast(st.meta || 'Claude handoff failed — copied to clipboard.', 'error');
+        } else {
+          showToast(st.label, 'success');
+        }
+        break;
+      }
+    }
+    chrome.storage.local.remove('bgStatus');
+    setLoading(sendToClaudeBtn, false);
   });
 
   // ── Options link ──────────────────────────────────────────────────────────────

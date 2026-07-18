@@ -10,10 +10,34 @@
 
   <div class="popup">
 
-    <!-- Toast — fixed top banner, never overlaps content below -->
+    <!-- Toast — fixed top banner, sits above everything else -->
     <div class="toast" id="toast" role="status" aria-live="polite">
       <span class="toast-icon" aria-hidden="true">✓</span>
       <span id="toastMsg"></span>
+    </div>
+
+    <!-- Confirmation modal — shown before logging out for Claude handoff -->
+    <div class="modal-backdrop" id="confirmModal" aria-modal="true" role="dialog" aria-labelledby="confirmTitle">
+      <div class="modal">
+        <div class="modal-header">
+          <span class="modal-icon" aria-hidden="true">⚠</span>
+          <span class="modal-title" id="confirmTitle">Switch Claude Account?</span>
+        </div>
+        <p class="modal-body">
+          This will log you out of your current Claude account, then wait for you
+          to sign into a different one. Your handoff prompt is saved and will be
+          pasted automatically once you're in.
+        </p>
+        <label class="modal-never-again">
+          <input type="checkbox" id="confirmNeverAgain">
+          <span class="modal-check-mark" aria-hidden="true"></span>
+          Don't ask me again
+        </label>
+        <div class="modal-actions">
+          <button class="modal-btn modal-btn-cancel" id="confirmCancelBtn">Cancel</button>
+          <button class="modal-btn modal-btn-proceed" id="confirmProceedBtn">Continue</button>
+        </div>
+      </div>
     </div>
 
     <!-- Header -->
@@ -27,7 +51,7 @@
       </div>
       <div class="header-text">
         <h1 class="app-name">Context Handoff</h1>
-        <span class="app-version">v0.3.0 · Phase 3</span>
+        <span class="app-version">v0.4.0 · Phase 4</span>
       </div>
       <button class="icon-btn" id="optionsLink" title="Settings" aria-label="Open settings">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -89,6 +113,21 @@
         </button>
       </div>
 
+      <!-- Copy / Export preference row -->
+      <div class="pref-row" role="group" aria-label="Export preferences">
+        <span class="pref-label">On export:</span>
+        <label class="pref-check">
+          <input type="checkbox" id="copyPrefCheckbox" checked>
+          <span class="pref-check-mark" aria-hidden="true"></span>
+          Copy
+        </label>
+        <label class="pref-check">
+          <input type="checkbox" id="exportPrefCheckbox" checked>
+          <span class="pref-check-mark" aria-hidden="true"></span>
+          Download
+        </label>
+      </div>
+
       <!-- Handoff destinations — enabled only after handoff prompt is generated -->
       <div class="handoff-destinations">
         <button class="btn-secondary btn-destination btn-gpt" id="sendToGPTBtn" disabled
@@ -122,6 +161,17 @@
             <line x1="10" y1="14" x2="21" y2="3"/>
           </svg>
           Send HandOff to Grok
+        </button>
+
+        <button class="btn-secondary btn-destination btn-claude" id="sendToClaudeBtn" disabled
+                title="Generate a Handoff Prompt first, then click to switch accounts and continue in Claude">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+            <polyline points="15 3 21 3 21 9"/>
+            <line x1="10" y1="14" x2="21" y2="3"/>
+          </svg>
+          Send HandOff to Claude
         </button>
       </div>
 

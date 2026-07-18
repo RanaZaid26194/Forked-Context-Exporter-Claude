@@ -17,6 +17,7 @@
       --purple-l:    #9B5DE5;
       --purple-faint:rgba(124,58,237,0.08);
       --text:        #e8e8f0;
+      --text-sec:    #b8b8cc;
       --text-muted:  #7a7a96;
       --text-dim:    #4a4a62;
       --success:     #34d399;
@@ -37,7 +38,6 @@
       padding: 0 0 60px;
     }
 
-    /* Header */
     .page-header {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
@@ -55,7 +55,6 @@
 
     .container { max-width: 680px; margin: 0 auto; padding: 32px 24px; display: flex; flex-direction: column; gap: 28px; }
 
-    /* Cards */
     .card {
       background: var(--surface);
       border: 1px solid var(--border-soft);
@@ -70,21 +69,25 @@
       gap: 10px;
     }
     .card-title { font-size: 13px; font-weight: 600; flex: 1; }
-    .card-body  { padding: 16px 20px; }
+    .card-body  { padding: 16px 20px; display: flex; flex-direction: column; gap: 16px; }
 
-    /* Toggle */
+    /* Individual toggle row */
     .toggle-row {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
-      gap: 12px;
+      gap: 16px;
     }
-    .toggle-label { font-size: 13px; color: var(--text-muted); max-width: 440px; }
+    .toggle-info { flex: 1; }
+    .toggle-name  { font-size: 13px; color: var(--text); font-weight: 500; margin-bottom: 3px; }
+    .toggle-label { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
     .toggle-switch {
       position: relative;
       width: 40px;
       height: 22px;
       flex-shrink: 0;
+      margin-top: 2px;
     }
     .toggle-switch input { opacity: 0; width: 0; height: 0; }
     .toggle-track {
@@ -110,7 +113,13 @@
     .toggle-switch input:checked + .toggle-track { background: var(--purple); border-color: var(--purple); }
     .toggle-switch input:checked + .toggle-track::after { transform: translateX(18px); background: #fff; }
 
-    /* Textarea */
+    /* Thin divider between toggle rows */
+    .toggle-divider {
+      height: 1px;
+      background: var(--border-soft);
+      margin: 0 -20px;
+    }
+
     textarea {
       width: 100%;
       background: var(--surface-2);
@@ -129,8 +138,7 @@
     textarea:focus { border-color: var(--purple); }
     .textarea-hint { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
 
-    /* Buttons */
-    .btn-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
     .btn {
       display: inline-flex;
       align-items: center;
@@ -147,11 +155,8 @@
     .btn-primary:hover { background: var(--purple-l); }
     .btn-ghost { background: transparent; color: var(--text-muted); border-color: var(--border); }
     .btn-ghost:hover { background: var(--surface-2); color: var(--text); }
-    .btn-danger { background: transparent; color: var(--error); border-color: rgba(248,113,113,0.3); }
-    .btn-danger:hover { background: var(--error-bg); }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    /* Banner list */
     .banner-list { display: flex; flex-direction: column; gap: 10px; }
     .banner-empty { font-size: 12px; color: var(--text-dim); padding: 8px 0; }
     .banner-item {
@@ -160,13 +165,7 @@
       border-radius: 8px;
       padding: 12px 14px;
     }
-    .banner-text {
-      font-size: 12px;
-      color: var(--text);
-      font-family: 'SF Mono', Consolas, monospace;
-      word-break: break-word;
-      margin-bottom: 6px;
-    }
+    .banner-text { font-size: 12px; color: var(--text); font-family: 'SF Mono', Consolas, monospace; word-break: break-word; margin-bottom: 6px; }
     .banner-meta { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
     .banner-actions { display: flex; gap: 6px; }
     .btn-approve { background: var(--success-bg); color: var(--success); border: 1px solid rgba(52,211,153,0.25); border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; }
@@ -174,17 +173,10 @@
     .btn-dismiss { background: transparent; color: var(--text-dim); border: 1px solid var(--border-soft); border-radius: 6px; padding: 4px 10px; font-size: 11px; cursor: pointer; }
     .btn-dismiss:hover { color: var(--error); border-color: rgba(248,113,113,0.3); }
 
-    /* Status toast */
-    .save-status {
-      font-size: 12px;
-      padding: 4px 0;
-      min-height: 20px;
-      transition: opacity 200ms;
-    }
+    .save-status { font-size: 12px; padding: 4px 0; min-height: 20px; }
     .save-status.ok    { color: var(--success); }
     .save-status.error { color: var(--error); }
 
-    /* Badge */
     .badge {
       font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
       background: var(--purple-faint); color: var(--purple-l);
@@ -201,32 +193,97 @@
     </svg>
     <div>
       <div class="page-title">Context Handoff — Settings</div>
-      <div class="page-sub">v0.2.0 · All data stays local</div>
+      <div class="page-sub">v0.5.0 · All data stays local</div>
     </div>
   </header>
 
   <div class="container">
 
-    <!-- Auto-detect toggle -->
+    <!-- General behaviour -->
     <div class="card">
       <div class="card-header">
-        <span class="card-title">Limit Auto-Detection</span>
+        <span class="card-title">General</span>
         <span class="badge">Phase 2</span>
       </div>
       <div class="card-body">
         <div class="toggle-row">
-          <span class="toggle-label">
-            Automatically watch for usage-limit banners and notify you with a one-click export prompt. Disabling this stops all MutationObserver activity.
-          </span>
+          <div class="toggle-info">
+            <div class="toggle-name">Auto-detect usage limits</div>
+            <div class="toggle-label">
+              Watch for usage-limit banners and badge the extension icon so you
+              know exactly when to export. Disabling this stops all
+              MutationObserver activity on claude.ai.
+            </div>
+          </div>
           <label class="toggle-switch" title="Toggle auto-detection">
             <input type="checkbox" id="autoDetectToggle" checked>
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+
+        <div class="toggle-divider"></div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-name">Auto-paste into destination</div>
+            <div class="toggle-label">
+              When you click Send HandOff to GPT / Gemini / Grok / Claude,
+              automatically fill the chat input with the handoff prompt.
+              Turn this off if you only want the tab to open without touching the input.
+            </div>
+          </div>
+          <label class="toggle-switch" title="Toggle auto-paste">
+            <input type="checkbox" id="autoPasteToggle" checked>
             <span class="toggle-track"></span>
           </label>
         </div>
       </div>
     </div>
 
-    <!-- Phrase list editor -->
+    <!-- Claude account switch -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Claude Account Switch</span>
+        <span class="badge">New</span>
+      </div>
+      <div class="card-body">
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-name">Auto-click "Continue with Google"</div>
+            <div class="toggle-label">
+              After logging out, automatically click the Google sign-in button
+              on the Claude login page so you land straight on the account picker
+              without having to click anything yourself.
+            </div>
+          </div>
+          <label class="toggle-switch" title="Toggle auto Google sign-in">
+            <input type="checkbox" id="autoGoogleSignInToggle" checked>
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+
+        <div class="toggle-divider"></div>
+
+        <div class="toggle-row">
+          <div class="toggle-info">
+            <div class="toggle-name">Skip logout confirmation</div>
+            <div class="toggle-label">
+              Skip the "Switch Claude Account?" dialog and go straight to logout
+              when you click Send HandOff to Claude. You can also enable this
+              from the "Don't ask me again" checkbox in the popup itself.
+            </div>
+          </div>
+          <label class="toggle-switch" title="Toggle logout confirmation">
+            <input type="checkbox" id="skipLogoutConfirmToggle">
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Detection phrases -->
     <div class="card">
       <div class="card-header">
         <span class="card-title">Detection Phrases</span>
@@ -236,7 +293,7 @@
         <p class="textarea-hint">One phrase per line. Case-insensitive. If any phrase appears in newly added DOM text, detection fires immediately.</p>
         <div class="btn-row">
           <button class="btn btn-primary" id="savePhrases">Save phrases</button>
-          <button class="btn btn-ghost" id="restoreDefaults">Restore defaults</button>
+          <button class="btn btn-ghost"   id="restoreDefaults">Restore defaults</button>
         </div>
         <div class="save-status" id="saveStatus"></div>
       </div>
@@ -249,9 +306,10 @@
         <span id="bannerCount" class="badge" style="display:none"></span>
       </div>
       <div class="card-body">
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">
-          When the input-disabled heuristic fires but no phrase matched, the banner text is logged here.
-          Approve it to add the matched phrase to your detection list.
+        <p style="font-size:12px;color:var(--text-muted)">
+          When the input-disabled heuristic fires but no phrase matched,
+          the banner text is logged here. Approve it to add the phrase to
+          your detection list.
         </p>
         <div class="banner-list" id="bannerList">
           <p class="banner-empty">No unrecognized banners logged yet.</p>

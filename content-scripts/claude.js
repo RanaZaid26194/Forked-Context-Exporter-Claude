@@ -24,6 +24,60 @@
   // This makes the scraper resilient to DOM refactors — add newer selectors to
   // the front of each array when Claude updates their UI.
 
+  // Selectors for the logout flow — avatar menu first, then the logout item.
+  // Same deal as the scraper selectors: if Anthropic refactors their nav,
+  // add the new selector to the front of the array and the old one stays as fallback.
+  var NAV_SEL = {
+
+    // The clickable avatar / user-menu trigger in the sidebar.
+    // best-effort selectors, verify against live DOM
+    avatarBtn: [
+      'button[data-testid="user-menu-trigger"]',
+      'button[aria-label="Open user menu"]',
+      'button[aria-label="User menu"]',
+      '[data-testid="user-menu-button"]',
+      'nav button[class*="avatar"]',
+    ],
+
+    // The logout item inside the dropdown that appears after clicking the avatar.
+    // best-effort selectors, verify against live DOM
+    logoutItem: [
+      'button[data-testid="logout"]',
+      '[role="menuitem"][data-testid="logout"]',
+      'button[aria-label="Log out"]',
+      '[role="menuitem"]',   // last-resort: grab all menuitems and find one whose text matches
+    ],
+
+    // Something that only exists when the user is properly logged in.
+    // If any of these are found we consider the session authenticated.
+    // best-effort selectors, verify against live DOM
+    authIndicator: [
+      '[data-testid="user-menu-trigger"]',
+      '[data-testid="new-chat-button"]',
+      'nav[aria-label="Sidebar"]',
+      'button[aria-label="Open user menu"]',
+    ],
+
+    // The chat input — used by FILL_INPUT.
+    // Matches what limit detection already uses in INPUT_SELS below.
+    chatInput: [
+      '[data-testid="chat-input"]',
+      'div[contenteditable="true"]',
+      'textarea',
+    ],
+
+    // "Continue with Google" button on the Claude login page.
+    // Confirmed via live DOM (Jun 2026): the button has data-testid="login-with-google".
+    // That goes first. Text-content scan is the fallback in case Anthropic ever
+    // removes the testid — it picks the shortest element whose visible text
+    // contains "google", which is always the sign-in button.
+    googleSignInBtn: [
+      '[data-testid="login-with-google"]',
+      'button[data-testid="login-with-google"]',
+    ],
+
+  };
+
   var SEL = {
 
     // Turn containers — each conversation turn (human or AI) lives in one of
@@ -105,12 +159,6 @@
    *
    * Primary signal: feedback/reaction buttons (only present on assistant turns).
    * Secondary signal: copy button, message actions group.
-   *
-   * Why: Claude's DOM renders an action bar with thumbs-up/down (and a copy
-   * button) beneath every assistant message but not beneath user messages.
-   * This is more reliable than positional index because Claude sometimes
-   * inserts system messages or tool-use blocks that break simple even/odd
-   * alternation.
    */
   function isAssistantTurn(turnEl) {
     var cls = turnEl.className || '';
@@ -201,9 +249,6 @@
     var title = getTitle();
 
     // ── Strategy 1: Common-ancestor walk ────────────────────────────────────────
-    // Find a user-message element AND a feedback button. Walk up from each to
-    // find their closest common ancestor — that's the conversation container.
-    // Then walk its children, classifying each by what it contains.
     var firstUserMsg = document.querySelector('[data-testid="user-message"]');
     var firstFeedbackBtn = null;
     for (var fb = 0; fb < SEL.feedbackButtons.length; fb++) {
@@ -213,35 +258,27 @@
       } catch (e) { /* */ }
     }
 
-
-
     if (firstUserMsg && firstFeedbackBtn) {
-      // Collect all ancestors of the user message element
       var userAncestors = new Set();
       var node = firstUserMsg;
       while (node) {
         userAncestors.add(node);
         node = node.parentElement;
       }
-      // Walk up from feedback button until we hit a shared ancestor
       var container = firstFeedbackBtn.parentElement;
       while (container && !userAncestors.has(container)) {
         container = container.parentElement;
       }
-
-
 
       if (container && container.children.length >= 2) {
         var classifiedEls = [];
         var children = Array.from(container.children);
         for (var c = 0; c < children.length; c++) {
           var child = children[c];
-          // User turn: contains a user-message testid
           if (child.querySelector('[data-testid="user-message"]') || child.getAttribute('data-testid') === 'user-message') {
             classifiedEls.push({ el: child, role: 'user' });
             continue;
           }
-          // Assistant turn: contains a feedback button
           var hasFeedback = false;
           for (var f = 0; f < SEL.feedbackButtons.length; f++) {
             try {
@@ -256,14 +293,11 @@
           }
         }
 
-
-
         if (classifiedEls.length > 0) {
           var turns = [];
           for (var t = 0; t < classifiedEls.length; t++) {
             var text = extractText(classifiedEls[t].el);
             var codeBlocks = extractCodeBlocks(classifiedEls[t].el);
-
             if (!text && codeBlocks.length === 0) continue;
             turns.push({ role: classifiedEls[t].role, text: text, codeBlocks: codeBlocks });
           }
@@ -282,7 +316,6 @@
     }
 
     // ── Strategy 2: Legacy CSS-class selector fallback ─────────────────────────
-    // Used if Strategy 1 finds nothing (e.g. Claude refactors data-testid).
     var turnEls = queryAll(SEL.turnContainers);
 
     if (turnEls.length === 0) {
@@ -337,7 +370,6 @@
   function debugDOM() {
     var report = [];
     try {
-      // 1. Check if main exists
       var main = document.querySelector('main');
       report.push('main exists: ' + (!!main));
       if (main) {
@@ -349,7 +381,6 @@
         }
       }
 
-      // 2. Look for any data-testid elements on the page
       var testidEls = document.querySelectorAll('[data-testid]');
       report.push('Total elements with data-testid: ' + testidEls.length);
       var uniqueTestIds = {};
@@ -358,7 +389,6 @@
       });
       report.push('Unique data-testids found: ' + Object.keys(uniqueTestIds).slice(0, 30).join(', '));
 
-      // 3. Search for potential turn elements containing "feedback", "thumbs", or "copy"
       var copyBtns = document.querySelectorAll('button');
       var btnLabels = [];
       copyBtns.forEach(function(btn) {
@@ -369,7 +399,6 @@
       });
       report.push('Buttons with indicators: ' + btnLabels.slice(0, 10).join('; '));
 
-      // 4. Look for divs with classes that might be conversation items
       var divs = document.querySelectorAll('div');
       var potentialDivs = [];
       divs.forEach(function(d) {
@@ -383,6 +412,19 @@
       report.push('Error during debugDOM: ' + e.message);
     }
     return report.join('\n');
+  }
+
+  // ── findChatInput helper ──────────────────────────────────────────────────
+  // Shared by FILL_INPUT — re-queries fresh each time so robustFill's
+  // retry loop always sees the latest DOM state.
+  function findChatInput() {
+    for (var i = 0; i < NAV_SEL.chatInput.length; i++) {
+      try {
+        var el = document.querySelector(NAV_SEL.chatInput[i]);
+        if (el) return el;
+      } catch (e) { /* invalid selector */ }
+    }
+    return null;
   }
 
   // ── Message listener ───────────────────────────────────────────────────────
@@ -411,19 +453,194 @@
         console.error('[Context Handoff] Scrape error:', err);
         sendResponse({ ok: false, error: err.message });
       }
-      return true; // keep message channel open (required for async sendResponse)
+      return true;
     }
 
-    // Phase 2: handle LIMIT_CHECK action (internal — see limit detection below)
+    // ── FILL_INPUT ─────────────────────────────────────────────────────────────
+    // Paste the handoff prompt into the chat input using the shared robustFill
+    // helper (same as chatgpt.js / gemini.js / grok.js). Falls back to
+    // clipboard-only if we can't find or set the input.
+
+    if (message.action === 'FILL_INPUT') {
+      var text = message.text || '';
+      if (!text) {
+        sendResponse({ ok: false, error: 'No text provided to fill.' });
+        return true;
+      }
+
+      // Wait up to 10 s for the input to appear (claude.ai/new needs a moment to hydrate)
+      var fillMaxWait = 10000;
+      var fillStart   = Date.now();
+
+      function tryFill() {
+        var result = window.ContextHandoff.robustFill(findChatInput, text);
+        if (result.ok) {
+          sendResponse({ ok: true, strategy: result.strategy });
+          return;
+        }
+
+        if (Date.now() - fillStart < fillMaxWait) {
+          setTimeout(tryFill, 200);
+        } else {
+          console.warn('[Context Handoff] FILL_INPUT: could not fill chat input within timeout.');
+          try { navigator.clipboard.writeText(text).catch(function() {}); } catch (e) {}
+          sendResponse({ ok: false, clipboardFallback: true });
+        }
+      }
+
+      // Short initial delay — claude.ai/new finishes React hydration a beat
+      // after document_idle fires, so the input may not exist yet.
+      setTimeout(tryFill, 200);
+      return true; // keep message channel open for async sendResponse
+    }
+
+    // ── LOGOUT ─────────────────────────────────────────────────────────────────
+    // Clicks through the avatar menu → logout item.
+    // We wait up to 3 s for the dropdown to appear after clicking the avatar,
+    // then scan menuitems for one whose text contains "log out" / "sign out".
+
+    if (message.action === 'LOGOUT') {
+      (function () {
+        var avatarEl = null;
+        for (var ai = 0; ai < NAV_SEL.avatarBtn.length; ai++) {
+          avatarEl = document.querySelector(NAV_SEL.avatarBtn[ai]);
+          if (avatarEl) break;
+        }
+
+        if (!avatarEl) {
+          console.warn('[Context Handoff] LOGOUT: could not find avatar/menu button.');
+          sendResponse({ ok: false, error: 'Could not find user menu button.' });
+          return;
+        }
+
+        avatarEl.click();
+
+        var waited  = 0;
+        var maxWait = 3000;
+        var tick    = 100;
+
+        var poll = setInterval(function () {
+          waited += tick;
+
+          // Try specific selectors first
+          var logoutEl = null;
+          for (var li = 0; li < NAV_SEL.logoutItem.length - 1; li++) {
+            logoutEl = document.querySelector(NAV_SEL.logoutItem[li]);
+            if (logoutEl) break;
+          }
+
+          // Last resort: find any menuitem whose text matches "log out" / "sign out"
+          if (!logoutEl) {
+            var allItems = document.querySelectorAll('[role="menuitem"]');
+            for (var mi = 0; mi < allItems.length; mi++) {
+              var itemText = (allItems[mi].textContent || '').toLowerCase();
+              if (itemText.indexOf('log out') !== -1 || itemText.indexOf('sign out') !== -1) {
+                logoutEl = allItems[mi];
+                break;
+              }
+            }
+          }
+
+          if (logoutEl) {
+            clearInterval(poll);
+            logoutEl.click();
+            sendResponse({ ok: true });
+            return;
+          }
+
+          if (waited >= maxWait) {
+            clearInterval(poll);
+            console.warn('[Context Handoff] LOGOUT: menu appeared but no logout item found within timeout.');
+            sendResponse({ ok: false, error: 'Logout item not found in menu.' });
+          }
+        }, tick);
+      })();
+
+      return true; // async sendResponse
+    }
+
+    // ── CLICK_GOOGLE_SIGNIN ────────────────────────────────────────────────────
+    // After logout, the login page appears. This handler finds the
+    // "Continue with Google" / "Sign in with Google" button and clicks it,
+    // so the user only has to pick their account in the Google popup.
+    // Polls for up to 8 s since the login page may still be loading.
+
+    if (message.action === 'CLICK_GOOGLE_SIGNIN') {
+      var gsWaited  = 0;
+      var gsMaxWait = 8000;
+      var gsTick    = 150;
+
+      var gsPoll = setInterval(function () {
+        gsWaited += gsTick;
+
+        var btnEl = null;
+
+        // Primary: data-testid="login-with-google" — confirmed via live DOM
+        // inspection on claude.ai/login (Jun 2026). Most reliable, unambiguous.
+        for (var gi = 0; gi < NAV_SEL.googleSignInBtn.length; gi++) {
+          try {
+            var candidate = document.querySelector(NAV_SEL.googleSignInBtn[gi]);
+            if (candidate) { btnEl = candidate; break; }
+          } catch (e) { /* invalid selector, skip */ }
+        }
+
+        // Fallback: text-content scan — finds the shortest element whose visible
+        // text contains "google". Handles Anthropic removing the testid attribute.
+        if (!btnEl) {
+          var allClickable = document.querySelectorAll('button, [role="button"]');
+          var bestLen      = Infinity;
+          for (var bi = 0; bi < allClickable.length; bi++) {
+            var elText = (allClickable[bi].textContent || '').trim().toLowerCase();
+            if (elText.indexOf('google') !== -1 && elText.length < 60 && elText.length < bestLen) {
+              bestLen = elText.length;
+              btnEl   = allClickable[bi];
+            }
+          }
+        }
+
+        if (btnEl) {
+          clearInterval(gsPoll);
+          btnEl.focus();
+          btnEl.click();
+          sendResponse({ ok: true });
+          return;
+        }
+
+        if (gsWaited >= gsMaxWait) {
+          clearInterval(gsPoll);
+          // Non-fatal — user just has to click the Google button manually
+          console.warn('[Context Handoff] CLICK_GOOGLE_SIGNIN: button not found within timeout.');
+          sendResponse({ ok: false, error: 'Google sign-in button not found — click it manually.' });
+        }
+      }, gsTick);
+
+      return true; // async sendResponse
+    }
+
+    // ── CHECK_LOGGED_IN ────────────────────────────────────────────────────────
+    // Popup polls this after the user picks their new account on the Google
+    // auth screen. Returns true once the sidebar / nav reappears — that's our
+    // signal that the new session is live and we're safe to navigate to /new.
+
+    if (message.action === 'CHECK_LOGGED_IN') {
+      try {
+        var loggedIn = false;
+        for (var ci = 0; ci < NAV_SEL.authIndicator.length; ci++) {
+          if (document.querySelector(NAV_SEL.authIndicator[ci])) {
+            loggedIn = true;
+            break;
+          }
+        }
+        sendResponse({ ok: true, loggedIn: loggedIn });
+      } catch (err) {
+        sendResponse({ ok: false, loggedIn: false, error: err.message });
+      }
+      return true;
+    }
+
   });
 
   // ── Limit detection (Phase 2) ──────────────────────────────────────────────
-  //
-  // Layer 1: phrase matching against limit-signals (from storage or bundled JSON).
-  // Layer 2: chat input becomes disabled AND a new banner/block appears in same tick.
-  // Layer 3: Layer 2 fires without Layer 1 → log banner text for user review in Options.
-  //
-  // Fires at most once per page load to avoid notification spam.
 
   var limitFired   = false;
   var limitPhrases = [];
@@ -487,10 +704,8 @@
       }
       if (!addedTexts.length) return;
       var allText = addedTexts.join(' ');
-      // Layer 1: phrase match
       var matched = checkPhrases(allText);
       if (matched) { fireLimitDetected(matched, null); return; }
-      // Layer 2: input disabled + new block
       if (hasNewBlock && isInputDisabled()) { fireLimitDetected(null, allText); }
     });
     observer.observe(document.body, { childList: true, subtree: true });
@@ -522,4 +737,3 @@
   console.log('[Context Handoff] claude.js loaded on', window.location.href);
 
 })();
-
